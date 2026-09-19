@@ -9,10 +9,8 @@ export function ThemeProvider({ children }) {
   const [isDark, setIsDark] = useState(() => {
     try {
       const stored = localStorage.getItem('careerpilot_theme');
-      if (stored !== null) {
-        return stored === 'dark';
-      }
-      return window.matchMedia('(prefers-color-scheme: dark)').matches;
+      // The default and primary theme of the website is the warm cream light theme
+      return stored === 'dark';
     } catch {
       return false;
     }
@@ -28,19 +26,6 @@ export function ThemeProvider({ children }) {
       localStorage.setItem('careerpilot_theme', 'light');
     }
   }, [isDark]);
-
-  // Listen to system preference changes if no manual override stored
-  useEffect(() => {
-    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-    const handleChange = (e) => {
-      const stored = localStorage.getItem('careerpilot_theme');
-      if (!stored) {
-        setIsDark(e.matches);
-      }
-    };
-    mediaQuery.addEventListener('change', handleChange);
-    return () => mediaQuery.removeEventListener('change', handleChange);
-  }, []);
 
   const toggleTheme = () => {
     setIsDark((prev) => !prev);

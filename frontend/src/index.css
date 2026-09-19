@@ -5,52 +5,52 @@
 @layer base {
   :root {
     --bg-color: #F8F7F4;
-    --bg-rgb: 248, 247, 244;
+    --bg-rgb: 248 247 244;
     --secondary-color: #F3F1EC;
-    --secondary-rgb: 243, 241, 236;
+    --secondary-rgb: 243 241 236;
     --surface-color: #ECE8DF;
-    --surface-rgb: 236, 232, 223;
+    --surface-rgb: 236 232 223;
     --surface-light-color: #F5F3ED;
-    --surface-light-rgb: 245, 243, 237;
+    --surface-light-rgb: 245 243 237;
     --border-muted: #E2DDD3;
-    --border-muted-rgb: 226, 221, 211;
+    --border-muted-rgb: 226 221 211;
     --text-primary: #1C1C1C;
-    --text-primary-rgb: 28, 28, 28;
+    --text-primary-rgb: 28 28 28;
     --text-secondary: #59636A;
-    --text-secondary-rgb: 89, 99, 106;
+    --text-secondary-rgb: 89 99 106;
     --text-muted: #888E94;
     --accent-color: #4A5C46;
-    --accent-rgb: 74, 92, 70;
+    --accent-rgb: 74 92 70;
     --accent-hover: #3D4D39;
     --accent-light: #EAEFE9;
     --accent-dark: #2E3A2B;
     --charcoal-color: #1C1C1C;
-    --charcoal-rgb: 28, 28, 28;
+    --charcoal-rgb: 28 28 28;
   }
 
   html.dark {
     --bg-color: #131412;
-    --bg-rgb: 19, 20, 18;
+    --bg-rgb: 19 20 18;
     --secondary-color: #1A1C18;
-    --secondary-rgb: 26, 28, 24;
+    --secondary-rgb: 26 28 24;
     --surface-color: #21241F;
-    --surface-rgb: 33, 36, 31;
+    --surface-rgb: 33 36 31;
     --surface-light-color: #292D26;
-    --surface-light-rgb: 41, 45, 38;
+    --surface-light-rgb: 41 45 38;
     --border-muted: #333830;
-    --border-muted-rgb: 51, 56, 48;
+    --border-muted-rgb: 51 56 48;
     --text-primary: #EDEAE1;
-    --text-primary-rgb: 237, 234, 225;
+    --text-primary-rgb: 237 234 225;
     --text-secondary: #A3ACA0;
-    --text-secondary-rgb: 163, 172, 160;
+    --text-secondary-rgb: 163 172 160;
     --text-muted: #80897C;
     --accent-color: #6F8B69;
-    --accent-rgb: 111, 139, 105;
+    --accent-rgb: 111 139 105;
     --accent-hover: #81A17A;
     --accent-light: #1E271C;
     --accent-dark: #151D13;
     --charcoal-color: #262C23;
-    --charcoal-rgb: 38, 44, 35;
+    --charcoal-rgb: 38 44 35;
   }
 
   html {
@@ -79,8 +79,23 @@
     background-image: radial-gradient(rgba(237, 234, 225, 0.035) 1px, transparent 1px);
   }
 
+  /* Explicit brand styling and button contrast fallbacks */
+  .bg-charcoal {
+    background-color: #1C1C1C;
+    color: #FFFFFF;
+  }
   html.dark .bg-charcoal {
+    background-color: #262C23;
+    color: #FFFFFF;
     box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08);
+  }
+  .bg-accent {
+    background-color: #4A5C46;
+    color: #FFFFFF;
+  }
+  html.dark .bg-accent {
+    background-color: #6F8B69;
+    color: #FFFFFF;
   }
 
   h1, h2, h3, .font-editorial {
