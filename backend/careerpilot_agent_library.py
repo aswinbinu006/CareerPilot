@@ -606,6 +606,12 @@ def search_scholarships(stream: str, budget: str) -> str:
     return json.dumps(results, indent=2)
 
 
+# Startup verification of registered MCP tools (visible during boot and viva demonstration)
+print(f"[MCP SERVER] '{mcp.name}' online. Registered tools ({len(mcp.list_tools())}):")
+for _tool_info in mcp.list_tools():
+    print(f"   * Tool: '{_tool_info['name']}' -> {_tool_info['description']}")
+
+
 # --------------------------------------------------------------------------- #
 # 6. Unified LLM Client (Groq Llama-3.3-70B-Versatile + Offline Fallback)
 # --------------------------------------------------------------------------- #
@@ -1366,11 +1372,14 @@ class PathwayAgent:
         * 2025/2026 Entrance Exams & conducting bodies
         * Top government & private colleges matching budget & location
         * Scholarship opportunities & eligibility
-      - Executes Tavily Search (or MCP tools) to ground the advice in reality.
+      - Executes educational research tools via Model Context Protocol (MCP).
     """
-    def __init__(self, llm: LLMClient, search_tool: TavilySearchTool):
+    def __init__(self, llm: LLMClient, mcp_server: Optional[Any] = None, search_tool: Optional[Any] = None):
         self.llm = llm
-        self.search_tool = search_tool
+        if isinstance(mcp_server, TinyMCPServer):
+            self.mcp = mcp_server
+        else:
+            self.mcp = mcp
 
     def execute(self, state: CareerState) -> CareerState:
         record_log(state, "PathwayAgent", "Formulating search strategy for exams, colleges & scholarships...")
@@ -1404,15 +1413,35 @@ Student Marks: {profile.get('marks')}
 """
 
         search_plan = self.llm.complete_json(system_prompt, user_prompt)
-        
-        # Execute real-world searches
-        exam_q = search_plan.get("exam_query", f"Entrance exams for {degree} in {stream} India")
         college_q = search_plan.get("college_query", f"Top colleges for {degree} in {location} budget {budget}")
-        scholarship_q = search_plan.get("scholarship_query", f"Scholarships for {stream} 12th pass students India")
 
-        exam_results = self.search_tool.search(exam_q, max_results=2)
-        college_results = self.search_tool.search(college_q, max_results=2)
-        scholarship_results = self.search_tool.search(scholarship_q, max_results=2)
+        # 1. MCP Tool: search_colleges
+        record_log(state, "PathwayAgent", f"Invoking MCP tool: search_colleges(query='{college_q}')")
+        colleges_raw = self.mcp.call_tool("search_colleges", query=college_q)
+
+        # 2. MCP Tool: search_entrance_exams
+        record_log(state, "PathwayAgent", f"Invoking MCP tool: search_entrance_exams(stream='{stream}', degree='{degree}')")
+        exams_raw = self.mcp.call_tool("search_entrance_exams", stream=stream, degree=degree)
+
+        # 3. MCP Tool: search_scholarships
+        record_log(state, "PathwayAgent", f"Invoking MCP tool: search_scholarships(stream='{stream}', budget='{budget}')")
+        scholarships_raw = self.mcp.call_tool("search_scholarships", stream=stream, budget=budget)
+
+        # Parse MCP JSON output
+        try:
+            college_results = json.loads(colleges_raw) if isinstance(colleges_raw, str) else colleges_raw
+        except Exception:
+            college_results = colleges_raw
+
+        try:
+            exam_results = json.loads(exams_raw) if isinstance(exams_raw, str) else exams_raw
+        except Exception:
+            exam_results = exams_raw
+
+        try:
+            scholarship_results = json.loads(scholarships_raw) if isinstance(scholarships_raw, str) else scholarships_raw
+        except Exception:
+            scholarship_results = scholarships_raw
 
         pathway_data = {
             "search_queries": search_plan,
@@ -1422,7 +1451,7 @@ Student Marks: {profile.get('marks')}
         }
         state["pathway"] = pathway_data
 
-        record_log(state, "PathwayAgent", f"Educational research completed. Retrieved live data for {degree}.")
+        record_log(state, "PathwayAgent", f"Educational research completed via MCP layer. Retrieved live data for {degree}.")
         return state
 
 
@@ -1531,7 +1560,7 @@ def build_career_graph(llm: LLMClient, db: CareerDatabase, search_tool: TavilySe
     """
     planner_agent = PlannerAgent(llm, db)
     aptitude_agent = AptitudeAgent(llm)
-    pathway_agent = PathwayAgent(llm, search_tool)
+    pathway_agent = PathwayAgent(llm, mcp_server=mcp, search_tool=search_tool)
     guidance_agent = GuidanceAgent(llm, db)
 
     # Define Node Wrappers

@@ -15,14 +15,34 @@ All core intelligence and state logic is strictly imported from careerpilot_agen
 """
 
 import os
+import sqlite3
+import datetime
 from typing import Optional
+from dotenv import load_dotenv  # type: ignore
+import jwt  # type: ignore
+from passlib.hash import bcrypt  # type: ignore
+
 from fastapi import FastAPI, HTTPException, Query  # type: ignore
 from fastapi.middleware.cors import CORSMiddleware  # type: ignore
 from fastapi.responses import PlainTextResponse  # type: ignore
-
 from pydantic import BaseModel  # type: ignore
-import hashlib
-import sqlite3
+
+# Ensure .env configuration is loaded
+env_backend = os.path.join(os.path.dirname(__file__), ".env")
+if os.path.exists(env_backend):
+    load_dotenv(dotenv_path=env_backend, override=True)
+else:
+    load_dotenv()
+
+# Secure JWT Configuration
+JWT_SECRET = os.getenv("JWT_SECRET", "").strip()
+if not JWT_SECRET:
+    raise RuntimeError(
+        "CRITICAL STARTUP ERROR: 'JWT_SECRET' environment variable is not set. "
+        "Please configure JWT_SECRET in your backend/.env file."
+    )
+JWT_ALGORITHM = "HS256"
+JWT_EXPIRATION_HOURS = 24
 
 # Import all core logic from our single-file agent library
 from careerpilot_agent_library import (
@@ -108,14 +128,15 @@ def health_check():
 
 @app.post("/auth/signup")
 def signup(data: AuthSignupInput):
-    """Registers a student user with email and secure password."""
+    """Registers a student user with email and salted bcrypt password hash."""
     email = data.email.strip().lower()
     if not email or "@" not in email:
         raise HTTPException(status_code=400, detail="Please enter a valid email address.")
     if len(data.password) < 6:
         raise HTTPException(status_code=400, detail="Password must be at least 6 characters long.")
     
-    pwd_hash = hashlib.sha256(data.password.encode()).hexdigest()
+    # Securely hash password using bcrypt (automatic per-user random salt)
+    pwd_hash = bcrypt.hash(data.password)
     try:
         with sqlite3.connect(DATABASE_PATH) as conn:
             cursor = conn.cursor()
@@ -128,7 +149,15 @@ def signup(data: AuthSignupInput):
     except sqlite3.IntegrityError:
         raise HTTPException(status_code=400, detail="An account with this email already exists.")
     
-    token = f"cp_token_{user_id}_{hashlib.md5(email.encode()).hexdigest()[:8]}"
+    # Issue cryptographically signed JWT valid for 24 hours
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
+    token_payload = {
+        "user_id": user_id,
+        "email": email,
+        "exp": now_utc + datetime.timedelta(hours=JWT_EXPIRATION_HOURS)
+    }
+    token = jwt.encode(token_payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+
     return {
         "status": "success",
         "message": "Account created successfully.",
@@ -143,9 +172,8 @@ def signup(data: AuthSignupInput):
 
 @app.post("/auth/login")
 def login(data: AuthLoginInput):
-    """Authenticates student user and returns session token."""
+    """Authenticates student user and returns signed JWT session token."""
     email = data.email.strip().lower()
-    pwd_hash = hashlib.sha256(data.password.encode()).hexdigest()
     
     with sqlite3.connect(DATABASE_PATH) as conn:
         conn.row_factory = sqlite3.Row
@@ -153,10 +181,30 @@ def login(data: AuthLoginInput):
         cursor.execute("SELECT * FROM users WHERE email = ?", (email,))
         user = cursor.fetchone()
         
-        if not user or user["password_hash"] != pwd_hash:
+        # Verify password using bcrypt against stored salted hash.
+        # Note: Pre-migration legacy records in SQLite created with un-salted SHA-256
+        # hashes will fail bcrypt verification. Since the project is in pre-submission/development,
+        # users should register a fresh account or perform a one-time database reset.
+        if not user:
+            raise HTTPException(status_code=401, detail="Invalid email or password.")
+            
+        try:
+            is_valid = bcrypt.verify(data.password, user["password_hash"])
+        except Exception:
+            is_valid = False
+
+        if not is_valid:
             raise HTTPException(status_code=401, detail="Invalid email or password.")
         
-        token = f"cp_token_{user['id']}_{hashlib.md5(email.encode()).hexdigest()[:8]}"
+        # Issue cryptographically signed JWT valid for 24 hours
+        now_utc = datetime.datetime.now(datetime.timezone.utc)
+        token_payload = {
+            "user_id": user["id"],
+            "email": user["email"],
+            "exp": now_utc + datetime.timedelta(hours=JWT_EXPIRATION_HOURS)
+        }
+        token = jwt.encode(token_payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+
         return {
             "status": "success",
             "message": "Logged in successfully.",
@@ -175,27 +223,41 @@ def validate_session(
     token: Optional[str] = Query(None, description="Token")
 ):
     """
-    Validates whether the user account actually exists in SQLite.
-    If the database was cleared or account deleted, returns 401 so the frontend logs out immediately.
+    Validates JWT signature and expiry, and verifies user exists in SQLite.
+    Returns 401 on expired, malformed, or tampered tokens.
     """
+    if not token:
+        raise HTTPException(status_code=401, detail="Authentication token required.")
+
+    # Decode and verify JWT signature and expiration
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Session expired. Please log in again.")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid or tampered token. Access denied.")
+
+    token_email = payload.get("email")
+    token_user_id = payload.get("user_id")
+
+    # If email query parameter was provided, confirm it matches the token identity
+    if email and token_email and email.strip().lower() != token_email.strip().lower():
+        raise HTTPException(status_code=401, detail="Token does not match provided user identity.")
+
+    # Confirm user still exists in the database (e.g. not deleted or cleared)
     user = None
     with sqlite3.connect(DATABASE_PATH) as conn:
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
-
-        if email:
-            cursor.execute("SELECT id, email, name FROM users WHERE email = ?", (email.strip().lower(),))
+        if token_user_id:
+            cursor.execute("SELECT id, email, name FROM users WHERE id = ?", (token_user_id,))
+            user = cursor.fetchone()
+        if not user and token_email:
+            cursor.execute("SELECT id, email, name FROM users WHERE email = ?", (token_email.strip().lower(),))
             user = cursor.fetchone()
 
-        if not user and token and token.startswith("cp_token_"):
-            parts = token.split("_")
-            if len(parts) >= 3 and parts[2].isdigit():
-                uid = int(parts[2])
-                cursor.execute("SELECT id, email, name FROM users WHERE id = ?", (uid,))
-                user = cursor.fetchone()
-
     if not user:
-        raise HTTPException(status_code=401, detail="Session expired or user account not found in database.")
+        raise HTTPException(status_code=401, detail="User account no longer found in database.")
 
     return {
         "valid": True,
