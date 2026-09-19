@@ -249,8 +249,8 @@ export default function ContactPage() {
               </div>
 
               {/* Stylized Architectural Campus Map Placeholder */}
-              <div className="relative rounded-2xl overflow-hidden border border-borderMuted bg-stone-200 h-44 flex items-center justify-center text-center p-4">
-                <div className="absolute inset-0 bg-stone-300 opacity-60 bg-[radial-gradient(#4A5C46_1px,transparent_1px)] [background-size:16px_16px]" />
+              <div className="relative rounded-2xl overflow-hidden border border-borderMuted bg-surface h-44 flex items-center justify-center text-center p-4">
+                <div className="absolute inset-0 opacity-40 bg-[radial-gradient(var(--accent-color)_1px,transparent_1px)] [background-size:16px_16px]" />
                 <div className="relative z-10 p-4 rounded-xl bg-background/95 backdrop-blur border border-borderMuted shadow-xs">
                   <div className="flex items-center justify-center gap-1.5 text-accent font-mono text-xs mb-0.5">
                     <Globe className="w-3.5 h-3.5" />

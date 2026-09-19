@@ -163,7 +163,7 @@ export default function NotificationsPage() {
               onClick={() => setFilter(f)}
               className={`px-4 py-1.5 rounded-full text-xs font-mono uppercase tracking-wider transition-all duration-200 cursor-pointer ${
                 filter === f
-                  ? 'bg-charcoal text-white font-semibold shadow-xs'
+                  ? 'bg-charcoal dark:bg-accent text-white font-semibold shadow-xs'
                   : 'bg-surface hover:bg-surfaceLight text-textSecondary border border-borderMuted hover:border-accent/40'
               }`}
             >

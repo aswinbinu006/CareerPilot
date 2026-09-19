@@ -127,7 +127,7 @@ export default function ReportPage() {
                 <button
                   onClick={() => window.print()}
                   data-cursor="Print"
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-charcoal hover:bg-accent text-white rounded-full text-xs font-mono tracking-wide transition-all duration-200 shadow-sm hover:shadow-md active:scale-95 cursor-pointer"
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-charcoal dark:bg-accent hover:bg-accent dark:hover:bg-accent-hover text-white rounded-full text-xs font-mono tracking-wide transition-all duration-200 shadow-sm hover:shadow-md active:scale-95 cursor-pointer"
                 >
                   <Printer className="w-3.5 h-3.5" />
                   <span>Print Publication Dossier</span>

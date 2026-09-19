@@ -68,7 +68,7 @@ export default function AnimatedBackground() {
       {/* Drifting Warm Sand Glow */}
       <div
         ref={orb2Ref}
-        className="absolute top-[40%] -right-[15%] w-[700px] h-[700px] rounded-full bg-[#E5DFD3]/40 blur-[150px] will-change-transform"
+        className="absolute top-[40%] -right-[15%] w-[700px] h-[700px] rounded-full bg-[#E5DFD3]/25 dark:bg-accent/8 blur-[150px] will-change-transform"
       />
 
       {/* Gentle Bottom Amber/Stone Glow */}

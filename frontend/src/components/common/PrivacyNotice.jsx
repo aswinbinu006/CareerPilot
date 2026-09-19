@@ -94,7 +94,7 @@ export default function PrivacyNotice() {
         </button>
         <button
           onClick={handleAcceptAll}
-          className="px-4 py-1.5 rounded-full bg-charcoal text-white hover:bg-accent transition-colors shadow-xs cursor-pointer font-medium"
+          className="px-4 py-1.5 rounded-full bg-charcoal dark:bg-accent text-white hover:bg-accent dark:hover:bg-accent-hover transition-colors shadow-xs cursor-pointer font-medium"
         >
           Accept All
         </button>

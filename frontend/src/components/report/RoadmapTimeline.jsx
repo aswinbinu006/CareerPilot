@@ -235,7 +235,7 @@ export default function RoadmapTimeline({ recommendation, stream = '' }) {
             data-cursor="Select"
             className={`px-4 py-2 rounded-full text-xs font-mono tracking-wide transition-all duration-200 cursor-pointer ${
               activeYear === y.year
-                ? 'bg-charcoal text-white shadow-xs font-semibold scale-102'
+                ? 'bg-charcoal dark:bg-accent text-white shadow-xs font-semibold scale-102'
                 : 'bg-surface hover:bg-surfaceLight text-textSecondary border border-borderMuted hover:border-accent/40'
             }`}
           >

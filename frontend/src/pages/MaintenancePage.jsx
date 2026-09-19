@@ -103,7 +103,7 @@ export default function MaintenancePage() {
                 />
                 <button
                   type="submit"
-                  className="px-5 py-2.5 bg-charcoal hover:bg-accent text-white rounded-full text-xs font-mono tracking-wide flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-xs"
+                  className="px-5 py-2.5 bg-charcoal dark:bg-accent hover:bg-accent dark:hover:bg-accent-hover text-white rounded-full text-xs font-mono tracking-wide flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-xs"
                 >
                   <span>Notify Me</span>
                   <Send className="w-3 h-3" />

@@ -41,7 +41,7 @@ export default function ConfirmationModal({
     <div
       role="alertdialog"
       aria-modal="true"
-      className="fixed inset-0 z-50 bg-charcoal/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fade-in no-print"
+      className="fixed inset-0 z-50 bg-black/60 dark:bg-black/75 backdrop-blur-xs flex items-center justify-center p-4 animate-fade-in no-print"
       onClick={onCancel}
     >
       <div
@@ -52,7 +52,7 @@ export default function ConfirmationModal({
         <div className="flex items-start justify-between gap-4 mb-4">
           <div
             className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
-              isDestructive ? 'bg-red-100 text-red-700' : 'bg-accent-light text-accent'
+              isDestructive ? 'bg-red-100 dark:bg-red-950/60 text-red-700 dark:text-red-300' : 'bg-accent-light text-accent'
             }`}
           >
             <AlertCircle className="w-5 h-5 stroke-[2]" />
@@ -88,7 +88,7 @@ export default function ConfirmationModal({
             className={`px-5 py-2.5 rounded-full text-white transition-all shadow-xs cursor-pointer font-medium ${
               isDestructive
                 ? 'bg-red-600 hover:bg-red-700'
-                : 'bg-charcoal hover:bg-accent'
+                : 'bg-charcoal dark:bg-accent hover:bg-accent dark:hover:bg-accent-hover'
             }`}
           >
             {confirmLabel}

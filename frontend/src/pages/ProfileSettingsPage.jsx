@@ -113,7 +113,7 @@ export default function ProfileSettingsPage() {
                   onClick={() => setActiveTab(item.id)}
                   className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-mono tracking-wide transition-all cursor-pointer ${
                     isActive
-                      ? 'bg-charcoal text-white font-semibold shadow-xs'
+                      ? 'bg-charcoal dark:bg-accent text-white font-semibold shadow-xs'
                       : 'text-textSecondary hover:text-textPrimary hover:bg-background/60'
                   }`}
                 >
@@ -313,8 +313,8 @@ export default function ProfileSettingsPage() {
                   </button>
                 </div>
 
-                <div className="p-5 rounded-2xl bg-red-50/60 border border-red-200 space-y-3">
-                  <div className="flex items-center gap-2 text-red-800 text-xs font-mono uppercase tracking-wider">
+                <div className="p-5 rounded-2xl bg-red-50/60 dark:bg-red-950/40 border border-red-200 dark:border-red-900/50 space-y-3">
+                  <div className="flex items-center gap-2 text-red-800 dark:text-red-300 text-xs font-mono uppercase tracking-wider">
                     <AlertTriangle className="w-4 h-4" />
                     <span>Danger Zone</span>
                   </div>
@@ -394,9 +394,9 @@ export default function ProfileSettingsPage() {
 
       {/* Account Deletion Confirmation Modal */}
       {showDeleteModal && (
-        <div className="fixed inset-0 z-50 bg-charcoal/60 backdrop-blur-xs flex items-center justify-center p-6 animate-fade-in">
-          <div className="max-w-md w-full bg-surface p-8 rounded-3xl border border-red-200 shadow-2xl text-center">
-            <div className="w-12 h-12 rounded-full bg-red-100 text-red-700 flex items-center justify-center mx-auto mb-4">
+        <div className="fixed inset-0 z-50 bg-black/60 dark:bg-black/75 backdrop-blur-xs flex items-center justify-center p-6 animate-fade-in">
+          <div className="max-w-md w-full bg-surface p-8 rounded-3xl border border-red-200 dark:border-red-900/50 shadow-2xl text-center">
+            <div className="w-12 h-12 rounded-full bg-red-100 dark:bg-red-950/60 text-red-700 dark:text-red-300 flex items-center justify-center mx-auto mb-4">
               <Trash2 className="w-6 h-6" />
             </div>
             <h3 className="font-serif text-2xl text-textPrimary mb-2">Confirm Account Deletion</h3>

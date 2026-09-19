@@ -115,7 +115,7 @@ export default function Hero() {
                 <Link
                   to="/assessment"
                   data-cursor="Begin"
-                  className="inline-flex items-center justify-center gap-3 px-8 py-4 bg-charcoal hover:bg-accent text-white rounded-full text-sm font-medium tracking-wide transition-all duration-200 shadow-sm hover:shadow-md active:scale-[0.98] group"
+                  className="inline-flex items-center justify-center gap-3 px-8 py-4 bg-charcoal dark:bg-accent hover:bg-accent dark:hover:bg-accent-hover text-white rounded-full text-sm font-medium tracking-wide transition-all duration-200 shadow-sm hover:shadow-md active:scale-[0.98] group"
                 >
                   <span>Start Free Assessment</span>
                   <ArrowRight className="w-4 h-4 stroke-[1.75] transition-transform duration-200 group-hover:translate-x-1" />
@@ -173,7 +173,7 @@ export default function Hero() {
                 speed={7}
                 overlay={
                   <>
-                    <div className="absolute inset-0 bg-gradient-to-t from-charcoal/45 via-transparent to-transparent pointer-events-none" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/75 dark:from-black/85 via-black/20 to-transparent pointer-events-none" />
                     {/* Editorial Caption Card */}
                     <div className="absolute bottom-5 left-5 right-5 z-10 p-5 sm:p-6 rounded-2xl bg-white/95 dark:bg-[#1A1C18]/95 backdrop-blur-md border border-black/10 dark:border-white/10 shadow-2xl transition-transform duration-300 hover:translate-y-[-2px]">
                       <div className="flex items-center justify-between font-mono text-[11px] mb-2.5">

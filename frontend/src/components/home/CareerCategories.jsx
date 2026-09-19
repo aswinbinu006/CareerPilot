@@ -115,7 +115,7 @@ export default function CareerCategories() {
                   data-cursor="Select"
                   className={`px-4 py-1.5 rounded-full text-xs font-mono tracking-wide transition-all duration-200 ${
                     isActive
-                      ? 'bg-charcoal text-white shadow-xs font-semibold'
+                      ? 'bg-charcoal dark:bg-accent text-white shadow-xs font-semibold'
                       : 'text-textSecondary hover:text-textPrimary hover:bg-background/60'
                   }`}
                 >
@@ -142,7 +142,7 @@ export default function CareerCategories() {
               }}
             >
               {/* Card Image Banner with Parallax */}
-              <div className="relative h-48 w-full overflow-hidden bg-stone-200">
+              <div className="relative h-48 w-full overflow-hidden bg-stone-200 dark:bg-[#1A1C18]">
                 <ParallaxImage
                   src={stream.image}
                   alt={stream.title}
@@ -151,10 +151,10 @@ export default function CareerCategories() {
                   cursorText="Stream"
                   overlay={
                     <>
-                      <div className="absolute inset-0 bg-gradient-to-t from-charcoal/65 via-transparent to-transparent pointer-events-none" />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/75 dark:from-black/85 via-black/25 to-transparent pointer-events-none" />
                       <div className="absolute bottom-3 left-4 right-4 flex items-center justify-between text-white text-xs font-mono pointer-events-none">
                         <span>CURRICULUM PROFILE</span>
-                        <div className="w-7 h-7 rounded-full bg-white/20 backdrop-blur flex items-center justify-center group-hover:bg-white group-hover:text-charcoal group-hover:rotate-45 transition-all duration-300">
+                        <div className="w-7 h-7 rounded-full bg-white/20 backdrop-blur flex items-center justify-center group-hover:bg-white group-hover:text-[#1C1C1C] group-hover:rotate-45 transition-all duration-300">
                           <ArrowUpRight className="w-4 h-4" />
                         </div>
                       </div>

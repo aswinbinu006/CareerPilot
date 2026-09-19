@@ -336,7 +336,7 @@ export default function FloatingContactButton() {
           className={`group flex items-center gap-2.5 px-4 py-3 rounded-full shadow-luxury hover:shadow-2xl border transition-all duration-300 active:scale-95 cursor-pointer ${
             isOpen
               ? 'bg-accent text-white border-accent'
-              : 'bg-charcoal hover:bg-accent text-white border-borderMuted/30'
+              : 'bg-charcoal dark:bg-accent hover:bg-accent dark:hover:bg-accent-hover text-white border-borderMuted/30'
           }`}
         >
           <div className="w-5 h-5 flex items-center justify-center text-accent-light">
@@ -431,7 +431,7 @@ export default function FloatingContactButton() {
                   <div
                     className={`relative p-4 rounded-2xl max-w-[88%] text-xs leading-relaxed ${
                       isUser
-                        ? 'bg-charcoal text-white rounded-br-xs shadow-xs'
+                        ? 'bg-charcoal dark:bg-accent text-white rounded-br-xs shadow-xs'
                         : 'bg-background border border-borderMuted text-textPrimary rounded-bl-xs shadow-xs'
                     }`}
                   >
@@ -502,7 +502,7 @@ export default function FloatingContactButton() {
                 <Link
                   to="/assessment"
                   onClick={() => setIsOpen(false)}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-charcoal hover:bg-accent text-white rounded-full text-xs font-semibold shadow-xs transition-colors"
+                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-charcoal dark:bg-accent hover:bg-accent dark:hover:bg-accent-hover text-white rounded-full text-xs font-semibold shadow-xs transition-colors"
                 >
                   <span>Start Free Assessment</span>
                   <ArrowRight className="w-3.5 h-3.5" />
@@ -572,7 +572,7 @@ export default function FloatingContactButton() {
                 type="submit"
                 disabled={!inputMessage.trim() || isTyping}
                 aria-label="Send message"
-                className="p-2 rounded-xl bg-charcoal hover:bg-accent text-white disabled:opacity-40 disabled:hover:bg-charcoal transition-all active:scale-95 cursor-pointer"
+                className="p-2 rounded-xl bg-charcoal dark:bg-accent hover:bg-accent dark:hover:bg-accent-hover text-white disabled:opacity-40 transition-all active:scale-95 cursor-pointer"
               >
                 <Send className="w-3.5 h-3.5" />
               </button>

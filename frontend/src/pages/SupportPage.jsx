@@ -1,11 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Navbar from '../components/common/Navbar';
 import Footer from '../components/common/Footer';
-import { Search, HelpCircle, Mail, Phone, MessageSquare, ChevronDown, BookOpen, Compass, GraduationCap, FileCheck } from 'lucide-react';
+import { HelpCircle, Mail, Phone, MessageSquare, ChevronDown, BookOpen, Compass, GraduationCap, FileCheck } from 'lucide-react';
 import gsap from 'gsap';
 
 export default function SupportPage() {
-  const [searchQuery, setSearchQuery] = useState('');
   const [openCard, setOpenCard] = useState(null);
   const containerRef = useRef(null);
 
@@ -71,17 +70,12 @@ export default function SupportPage() {
     },
   ];
 
-  const filteredFaqs = popularFaqs.filter((faq) =>
-    faq.q.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    faq.a.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
   return (
     <div className="min-h-screen flex flex-col bg-background text-textPrimary">
       <Navbar />
 
       <main ref={containerRef} className="flex-1 max-w-6xl w-full mx-auto px-6 py-14">
-        {/* Header with Help Desk Search */}
+        {/* Header */}
         <div className="text-center max-w-2xl mx-auto mb-14">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-surface border border-borderMuted text-xs font-mono text-accent mb-4">
             <HelpCircle className="w-3.5 h-3.5" />
@@ -90,21 +84,9 @@ export default function SupportPage() {
           <h1 className="font-serif text-4xl sm:text-5xl text-textPrimary mb-4">
             How can our advisory board assist you?
           </h1>
-          <p className="text-sm sm:text-base text-textSecondary leading-relaxed mb-8">
+          <p className="text-sm sm:text-base text-textSecondary leading-relaxed">
             Explore verified documentation on our 4-stage counseling architecture, entrance exam calendars, and student dossier management.
           </p>
-
-          {/* Search Bar */}
-          <div className="relative max-w-xl mx-auto">
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search by topic: e.g. NIRF cutoffs, CUET, budget limits..."
-              className="w-full pl-12 pr-4 py-4 rounded-full bg-surface border border-borderMuted text-sm text-textPrimary placeholder:text-textMuted focus:outline-hidden focus:border-accent focus:ring-1 focus:ring-accent/20 shadow-xs transition-all"
-            />
-            <Search className="w-5 h-5 text-textMuted absolute left-4.5 top-1/2 -translate-y-1/2" />
-          </div>
         </div>
 
         {/* Contact Support Channels */}
@@ -187,7 +169,7 @@ export default function SupportPage() {
             Frequently Referenced Solutions
           </h2>
           <div className="divide-y divide-borderMuted border-y border-borderMuted">
-            {filteredFaqs.map((faq, idx) => {
+            {popularFaqs.map((faq, idx) => {
               const isOpen = openCard === idx;
               return (
                 <div key={idx} className="py-5">

@@ -97,7 +97,7 @@ export default function FAQ() {
                   <div
                     className={`w-9 h-9 rounded-full border border-borderMuted flex items-center justify-center text-textSecondary transition-all duration-300 group-hover:border-accent/40 ${
                       isOpen
-                        ? 'rotate-45 bg-charcoal text-white border-charcoal shadow-xs'
+                        ? 'rotate-45 bg-charcoal dark:bg-accent text-white border-charcoal dark:border-accent shadow-xs'
                         : 'bg-surface hover:bg-surfaceLight rotate-0'
                     }`}
                   >

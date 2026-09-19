@@ -18,7 +18,7 @@ export default function Button({
 
   const variants = {
     primary:
-      'bg-charcoal hover:bg-accent text-white rounded-full shadow-sm hover:shadow-md active:scale-[0.98]',
+      'bg-charcoal dark:bg-accent hover:bg-accent dark:hover:bg-accent-hover text-white rounded-full shadow-sm hover:shadow-md active:scale-[0.98]',
     accent:
       'bg-accent hover:bg-accent-hover text-white rounded-full shadow-sm hover:shadow-md active:scale-[0.98]',
     secondary:

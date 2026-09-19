@@ -157,7 +157,7 @@ export default function AuthPage() {
               data-cursor="Select"
               className={`flex-1 py-2 rounded-full text-xs font-mono uppercase tracking-wider transition-all duration-200 cursor-pointer ${
                 isLogin
-                  ? 'bg-charcoal text-white shadow-xs font-semibold'
+                  ? 'bg-charcoal dark:bg-accent text-white shadow-xs font-semibold'
                   : 'text-textSecondary hover:text-textPrimary'
               }`}
             >
@@ -172,7 +172,7 @@ export default function AuthPage() {
               data-cursor="Select"
               className={`flex-1 py-2 rounded-full text-xs font-mono uppercase tracking-wider transition-all duration-200 cursor-pointer ${
                 !isLogin
-                  ? 'bg-charcoal text-white shadow-xs font-semibold'
+                  ? 'bg-charcoal dark:bg-accent text-white shadow-xs font-semibold'
                   : 'text-textSecondary hover:text-textPrimary'
               }`}
             >
@@ -182,7 +182,7 @@ export default function AuthPage() {
 
           {/* Error Message */}
           {error && (
-            <div className="mb-6 p-4 rounded-xl bg-red-50 border border-red-200 flex items-start gap-3 text-red-800 text-xs animate-fade-in">
+            <div className="mb-6 p-4 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/50 flex items-start gap-3 text-red-800 dark:text-red-300 text-xs animate-fade-in">
               <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
               <span>{error}</span>
             </div>

@@ -252,7 +252,7 @@ export default function DashboardPage() {
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 relative z-10">
             {/* Student Info & Welcome */}
             <div className="flex items-start sm:items-center gap-4 sm:gap-5">
-              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-charcoal text-white flex items-center justify-center font-serif text-xl sm:text-2xl font-semibold shadow-md flex-shrink-0 border border-white/10">
+              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-charcoal dark:bg-accent text-white flex items-center justify-center font-serif text-xl sm:text-2xl font-semibold shadow-md flex-shrink-0 border border-white/10">
                 {initials}
               </div>
 
@@ -302,7 +302,7 @@ export default function DashboardPage() {
                 onClick={() => setActiveTab('overview')}
                 className={`px-4 py-2 rounded-xl transition-all cursor-pointer flex items-center gap-2 flex-shrink-0 ${
                   activeTab === 'overview'
-                    ? 'bg-charcoal text-white shadow-xs font-semibold'
+                    ? 'bg-charcoal dark:bg-accent text-white shadow-xs font-semibold'
                     : 'bg-background hover:bg-secondary text-textSecondary hover:text-textPrimary border border-borderMuted'
                 }`}
               >
@@ -317,7 +317,7 @@ export default function DashboardPage() {
                 onClick={() => setActiveTab('exams')}
                 className={`px-4 py-2 rounded-xl transition-all cursor-pointer flex items-center gap-2 flex-shrink-0 ${
                   activeTab === 'exams'
-                    ? 'bg-charcoal text-white shadow-xs font-semibold'
+                    ? 'bg-charcoal dark:bg-accent text-white shadow-xs font-semibold'
                     : 'bg-background hover:bg-secondary text-textSecondary hover:text-textPrimary border border-borderMuted'
                 }`}
               >
@@ -330,7 +330,7 @@ export default function DashboardPage() {
                 onClick={() => setActiveTab('scholarships')}
                 className={`px-4 py-2 rounded-xl transition-all cursor-pointer flex items-center gap-2 flex-shrink-0 ${
                   activeTab === 'scholarships'
-                    ? 'bg-charcoal text-white shadow-xs font-semibold'
+                    ? 'bg-charcoal dark:bg-accent text-white shadow-xs font-semibold'
                     : 'bg-background hover:bg-secondary text-textSecondary hover:text-textPrimary border border-borderMuted'
                 }`}
               >
@@ -342,7 +342,7 @@ export default function DashboardPage() {
                 onClick={() => setActiveTab('streams')}
                 className={`px-4 py-2 rounded-xl transition-all cursor-pointer flex items-center gap-2 flex-shrink-0 ${
                   activeTab === 'streams'
-                    ? 'bg-charcoal text-white shadow-xs font-semibold'
+                    ? 'bg-charcoal dark:bg-accent text-white shadow-xs font-semibold'
                     : 'bg-background hover:bg-secondary text-textSecondary hover:text-textPrimary border border-borderMuted'
                 }`}
               >
@@ -397,13 +397,13 @@ export default function DashboardPage() {
                     cx="28"
                     cy="28"
                     r="24"
-                    stroke="#4A5C46"
+                    stroke="currentColor"
                     strokeWidth="4"
                     fill="transparent"
                     strokeDasharray={2 * Math.PI * 24}
                     strokeDashoffset={2 * Math.PI * 24}
                     data-percent={avgConfidence || 0}
-                    className="progress-ring-circle"
+                    className="progress-ring-circle text-accent"
                     strokeLinecap="round"
                   />
                 </svg>
@@ -724,7 +724,7 @@ export default function DashboardPage() {
                     {/* Prominent CTA */}
                     <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
                       <Link to="/assessment" data-cursor="Begin">
-                        <button className="w-full sm:w-auto inline-flex items-center justify-center gap-3 px-8 py-4 bg-charcoal hover:bg-accent text-white rounded-full text-sm font-semibold tracking-wide transition-all duration-200 shadow-md hover:shadow-lg active:scale-[0.98] group cursor-pointer">
+                        <button className="w-full sm:w-auto inline-flex items-center justify-center gap-3 px-8 py-4 bg-charcoal dark:bg-accent hover:bg-accent dark:hover:bg-accent-hover text-white rounded-full text-sm font-semibold tracking-wide transition-all duration-200 shadow-md hover:shadow-lg active:scale-[0.98] group cursor-pointer">
                           <span>Begin 8-Step Assessment</span>
                           <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
                         </button>
@@ -902,7 +902,7 @@ export default function DashboardPage() {
                     onClick={() => setExamStreamFilter(stream)}
                     className={`px-3 py-1.5 rounded-full text-xs font-mono transition-all cursor-pointer ${
                       examStreamFilter === stream
-                        ? 'bg-charcoal text-white font-semibold shadow-xs'
+                        ? 'bg-charcoal dark:bg-accent text-white font-semibold shadow-xs'
                         : 'bg-surface hover:bg-surfaceLight text-textSecondary border border-borderMuted'
                     }`}
                   >
@@ -1027,7 +1027,7 @@ export default function DashboardPage() {
                       href={sch.portal}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-full bg-charcoal hover:bg-accent text-white text-xs font-mono font-semibold transition-all shadow-sm"
+                      className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-full bg-charcoal dark:bg-accent hover:bg-accent dark:hover:bg-accent-hover text-white text-xs font-mono font-semibold transition-all shadow-sm"
                     >
                       <span>Open NSP Portal</span>
                       <ExternalLink className="w-3.5 h-3.5" />

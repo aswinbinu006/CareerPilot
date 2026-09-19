@@ -348,7 +348,7 @@ export default function AssessmentPage() {
               {/* Button 1: View Existing Dossier */}
               <Link
                 to={`/report/${latestSession.session_id}`}
-                className="w-full flex items-center justify-center gap-2 py-3.5 px-6 bg-charcoal hover:bg-accent text-white rounded-full text-sm font-semibold tracking-wide transition-all duration-200 shadow-sm hover:shadow-md cursor-pointer group"
+                className="w-full flex items-center justify-center gap-2 py-3.5 px-6 bg-charcoal dark:bg-accent hover:bg-accent dark:hover:bg-accent-hover text-white rounded-full text-sm font-semibold tracking-wide transition-all duration-200 shadow-sm hover:shadow-md cursor-pointer group"
               >
                 <span>View Existing Assessment Dossier</span>
                 <ArrowUpRight className="w-4 h-4 transition-transform duration-200 group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />

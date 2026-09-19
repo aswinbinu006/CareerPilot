@@ -12,13 +12,11 @@ import {
   LayoutDashboard,
   HelpCircle,
   Sparkles,
-  Search,
 } from 'lucide-react';
 import gsap from 'gsap';
 import { api } from '../../services/api';
 import { useTheme } from '../../context/ThemeContext';
 import ConfirmationModal from './ConfirmationModal';
-import CommandPalette from './CommandPalette';
 import { getLenis } from '../../hooks/useLenis';
 
 export default function Navbar() {
@@ -28,19 +26,6 @@ export default function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('');
   const [logoutModalOpen, setLogoutModalOpen] = useState(false);
-  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
-
-  // Global Cmd+K / Ctrl+K keyboard shortcut to toggle Command Palette
-  useEffect(() => {
-    const handleKeyDown = (e) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
-        e.preventDefault();
-        setCommandPaletteOpen((prev) => !prev);
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
 
   const { isDark, toggleTheme } = useTheme();
   const headerRef = useRef(null);
@@ -305,20 +290,6 @@ export default function Navbar() {
 
           {/* Action Controls & Utilities */}
           <div className="hidden md:flex items-center gap-3">
-            {/* Command Palette Quick Search Button */}
-            <button
-              onClick={() => setCommandPaletteOpen(true)}
-              data-cursor="Search"
-              aria-label="Quick search or jump to (Cmd+K)"
-              className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-surface border border-borderMuted text-textSecondary hover:text-textPrimary hover:border-accent/40 transition-all cursor-pointer text-xs font-medium shadow-2xs"
-            >
-              <Search className="w-3.5 h-3.5 text-accent" />
-              <span className="hidden lg:inline text-[11px] text-textSecondary font-mono">Search</span>
-              <kbd className="hidden sm:inline-flex items-center px-1.5 py-0.5 text-[10px] font-mono bg-background border border-borderMuted rounded text-textSecondary">
-                ⌘K
-              </kbd>
-            </button>
-
             {/* Dark Mode Animated Toggle */}
             <button
               onClick={toggleTheme}
@@ -360,7 +331,7 @@ export default function Navbar() {
                   <Link
                     to="/assessment"
                     data-cursor="Assessment"
-                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-charcoal hover:bg-accent text-white rounded-full text-xs font-medium tracking-wide transition-all duration-200 shadow-xs hover:shadow-sm active:scale-[0.98] cursor-pointer group"
+                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-charcoal dark:bg-accent hover:bg-accent dark:hover:bg-accent-hover text-white rounded-full text-xs font-medium tracking-wide transition-all duration-200 shadow-xs hover:shadow-sm active:scale-[0.98] cursor-pointer group"
                   >
                     <Sparkles className="w-3.5 h-3.5 text-amber-300 transition-transform duration-200 group-hover:scale-110" />
                     <span>Take Assessment</span>
@@ -398,7 +369,7 @@ export default function Navbar() {
                 <Link
                   to="/assessment"
                   data-cursor="Begin"
-                  className="inline-flex items-center gap-2 px-5 py-2.5 bg-charcoal hover:bg-accent text-white rounded-full text-xs font-medium tracking-wide transition-all duration-200 shadow-sm hover:shadow-md active:scale-[0.98] cursor-pointer group"
+                  className="inline-flex items-center gap-2 px-5 py-2.5 bg-charcoal dark:bg-accent hover:bg-accent dark:hover:bg-accent-hover text-white rounded-full text-xs font-medium tracking-wide transition-all duration-200 shadow-sm hover:shadow-md active:scale-[0.98] cursor-pointer group"
                 >
                   <span>Start Free Assessment</span>
                   <ArrowUpRight className="w-3.5 h-3.5 transition-transform duration-200 group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
@@ -537,7 +508,7 @@ export default function Navbar() {
                   <Link
                     to="/assessment"
                     onClick={() => setMobileMenuOpen(false)}
-                    className="w-full flex items-center justify-center gap-2 py-3.5 bg-charcoal text-white rounded-full text-xs uppercase tracking-wider font-semibold shadow-sm cursor-pointer"
+                    className="w-full flex items-center justify-center gap-2 py-3.5 bg-charcoal dark:bg-accent text-white rounded-full text-xs uppercase tracking-wider font-semibold shadow-sm cursor-pointer"
                   >
                     <Sparkles className="w-4 h-4 text-amber-300" />
                     <span>Take Assessment</span>
@@ -573,7 +544,7 @@ export default function Navbar() {
                 <Link
                   to="/assessment"
                   onClick={() => setMobileMenuOpen(false)}
-                  className="w-full flex items-center justify-center gap-2 py-3.5 bg-charcoal text-white rounded-full text-xs uppercase tracking-wider font-semibold shadow-sm cursor-pointer"
+                  className="w-full flex items-center justify-center gap-2 py-3.5 bg-charcoal dark:bg-accent text-white rounded-full text-xs uppercase tracking-wider font-semibold shadow-sm cursor-pointer"
                 >
                   <span>Start Free Assessment</span>
                   <ArrowUpRight className="w-4 h-4" />
@@ -592,12 +563,6 @@ export default function Navbar() {
         confirmLabel="Sign Out"
         onConfirm={confirmLogout}
         onCancel={() => setLogoutModalOpen(false)}
-      />
-
-      {/* Command Palette Modal (Cmd+K / Ctrl+K) */}
-      <CommandPalette
-        isOpen={commandPaletteOpen}
-        onClose={() => setCommandPaletteOpen(false)}
       />
     </>
   );
