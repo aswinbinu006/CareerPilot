@@ -153,3 +153,18 @@ python careerpilot_agent_library.py
 ```bash
 python -m uvicorn main:app --host 127.0.0.1 --port 8000 --reload
 ```
+
+---
+
+## Cloud Deployment (Render)
+
+When deploying this backend to **Render** as a Python Web Service:
+1. **Root Directory**: Set to `backend` in Service Settings.
+2. **Build Command**: `pip install -r requirements.txt`
+3. **Start Command**: `uvicorn main:app --host 0.0.0.0 --port $PORT`
+4. **Environment Variables**: Add the following in Render's Environment tab:
+   - `JWT_SECRET`: Random secure string (HS256)
+   - `GROQ_API_KEY`: Your Groq API key
+   - `GROQ_MODEL`: `llama-3.3-70b-versatile` or `qwen/qwen3.8-27b`
+   - `TAVILY_API_KEY`: Your Tavily API key
+   - `OFFLINE_MODE`: `false`
