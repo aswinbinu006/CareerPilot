@@ -170,34 +170,65 @@ def signup(data: AuthSignupInput):
     }
 
 
+# Rate-limiting / Account Lockout Defense Configuration
+FAILED_LOGIN_ATTEMPTS: dict = {}
+MAX_FAILED_ATTEMPTS = 5
+LOCKOUT_DURATION_MINUTES = 30
+
+
 @app.post("/auth/login")
 def login(data: AuthLoginInput):
-    """Authenticates student user and returns signed JWT session token."""
+    """Authenticates student user and returns signed JWT session token with lockout defense."""
     email = data.email.strip().lower()
-    
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
+
+    # 1. Check if account is currently under defensive security lockout
+    attempt_info = FAILED_LOGIN_ATTEMPTS.get(email)
+    if attempt_info:
+        locked_until = attempt_info.get("locked_until")
+        if locked_until and now_utc < locked_until:
+            remaining_mins = max(1, int((locked_until - now_utc).total_seconds() / 60))
+            raise HTTPException(
+                status_code=423,
+                detail=f"Account temporarily locked due to consecutive failed login attempts. Please try again after {remaining_mins} minutes or reset your password."
+            )
+        elif locked_until and now_utc >= locked_until:
+            # Lockout period expired; reset attempt counter
+            FAILED_LOGIN_ATTEMPTS.pop(email, None)
+
     with sqlite3.connect(DATABASE_PATH) as conn:
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM users WHERE email = ?", (email,))
         user = cursor.fetchone()
-        
-        # Verify password using bcrypt against stored salted hash.
-        # Note: Pre-migration legacy records in SQLite created with un-salted SHA-256
-        # hashes will fail bcrypt verification. Since the project is in pre-submission/development,
-        # users should register a fresh account or perform a one-time database reset.
-        if not user:
-            raise HTTPException(status_code=401, detail="Invalid email or password.")
-            
-        try:
-            is_valid = bcrypt.verify(data.password, user["password_hash"])
-        except Exception:
-            is_valid = False
+
+        is_valid = False
+        if user:
+            try:
+                is_valid = bcrypt.verify(data.password, user["password_hash"])
+            except Exception:
+                is_valid = False
 
         if not is_valid:
-            raise HTTPException(status_code=401, detail="Invalid email or password.")
-        
+            # Increment failed attempt counter
+            entry = FAILED_LOGIN_ATTEMPTS.setdefault(email, {"count": 0, "locked_until": None})
+            entry["count"] += 1
+            if entry["count"] >= MAX_FAILED_ATTEMPTS:
+                entry["locked_until"] = now_utc + datetime.timedelta(minutes=LOCKOUT_DURATION_MINUTES)
+                raise HTTPException(
+                    status_code=423,
+                    detail=f"Account locked due to {MAX_FAILED_ATTEMPTS} consecutive failed attempts. Your account has been suspended for {LOCKOUT_DURATION_MINUTES} minutes."
+                )
+            remaining = MAX_FAILED_ATTEMPTS - entry["count"]
+            raise HTTPException(
+                status_code=401,
+                detail=f"Invalid email or password. {remaining} attempt(s) remaining before security lockout."
+            )
+
+        # Successful login: reset failed attempts counter
+        FAILED_LOGIN_ATTEMPTS.pop(email, None)
+
         # Issue cryptographically signed JWT valid for 24 hours
-        now_utc = datetime.datetime.now(datetime.timezone.utc)
         token_payload = {
             "user_id": user["id"],
             "email": user["email"],

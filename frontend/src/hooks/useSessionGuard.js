@@ -63,7 +63,6 @@ export function useSessionGuard() {
 
     inactivityTimerRef.current = setTimeout(() => {
       if (api.isAuthenticated()) {
-        console.log('[SessionGuard] Inactivity timeout reached (1 hour). Logging out.');
         performLogout('/session-expired');
       }
     }, INACTIVITY_TIMEOUT_MS);
@@ -75,7 +74,6 @@ export function useSessionGuard() {
 
     const isValid = await api.validateSession();
     if (!isValid) {
-      console.log('[SessionGuard] User not found in database. Force logout.');
       performLogout('/auth');
     }
   }, [performLogout]);
@@ -122,7 +120,6 @@ export function useSessionGuard() {
     try {
       const lastActive = parseInt(sessionStorage.getItem('careerpilot_last_active') || '0', 10);
       if (lastActive > 0 && Date.now() - lastActive > INACTIVITY_TIMEOUT_MS) {
-        console.log('[SessionGuard] Session was idle for over 1 hour. Logging out.');
         performLogout('/session-expired');
         return;
       }

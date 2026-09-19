@@ -12,11 +12,13 @@ import {
   LayoutDashboard,
   HelpCircle,
   Sparkles,
+  Search,
 } from 'lucide-react';
 import gsap from 'gsap';
 import { api } from '../../services/api';
 import { useTheme } from '../../context/ThemeContext';
 import ConfirmationModal from './ConfirmationModal';
+import CommandPalette from './CommandPalette';
 import { getLenis } from '../../hooks/useLenis';
 
 export default function Navbar() {
@@ -26,6 +28,19 @@ export default function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('');
   const [logoutModalOpen, setLogoutModalOpen] = useState(false);
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+
+  // Global Cmd+K / Ctrl+K keyboard shortcut to toggle Command Palette
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setCommandPaletteOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   const { isDark, toggleTheme } = useTheme();
   const headerRef = useRef(null);
@@ -290,6 +305,20 @@ export default function Navbar() {
 
           {/* Action Controls & Utilities */}
           <div className="hidden md:flex items-center gap-3">
+            {/* Command Palette Quick Search Button */}
+            <button
+              onClick={() => setCommandPaletteOpen(true)}
+              data-cursor="Search"
+              aria-label="Quick search or jump to (Cmd+K)"
+              className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-surface border border-borderMuted text-textSecondary hover:text-textPrimary hover:border-accent/40 transition-all cursor-pointer text-xs font-medium shadow-2xs"
+            >
+              <Search className="w-3.5 h-3.5 text-accent" />
+              <span className="hidden lg:inline text-[11px] text-textSecondary font-mono">Search</span>
+              <kbd className="hidden sm:inline-flex items-center px-1.5 py-0.5 text-[10px] font-mono bg-background border border-borderMuted rounded text-textSecondary">
+                ⌘K
+              </kbd>
+            </button>
+
             {/* Dark Mode Animated Toggle */}
             <button
               onClick={toggleTheme}
@@ -563,6 +592,12 @@ export default function Navbar() {
         confirmLabel="Sign Out"
         onConfirm={confirmLogout}
         onCancel={() => setLogoutModalOpen(false)}
+      />
+
+      {/* Command Palette Modal (Cmd+K / Ctrl+K) */}
+      <CommandPalette
+        isOpen={commandPaletteOpen}
+        onClose={() => setCommandPaletteOpen(false)}
       />
     </>
   );

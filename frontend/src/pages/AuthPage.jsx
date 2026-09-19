@@ -70,6 +70,10 @@ export default function AuthPage() {
       const target = searchParams.get('redirect') || location.state?.from?.pathname || '/dashboard';
       navigate(target, { replace: true });
     } catch (err) {
+      if (err.message && (err.message.toLowerCase().includes('locked') || err.message.toLowerCase().includes('suspended'))) {
+        navigate('/account-locked', { state: { email } });
+        return;
+      }
       setError(err.message || 'Authentication failed. Please verify your credentials.');
     } finally {
       setIsLoading(false);

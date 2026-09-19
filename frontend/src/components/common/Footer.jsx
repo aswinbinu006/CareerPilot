@@ -151,11 +151,6 @@ export default function Footer() {
           <div>
             &copy; {new Date().getFullYear()} CareerPilot Educational Technologies. All rights reserved.
           </div>
-          <div className="flex items-center gap-6">
-            <Link to="/404" className="hover:text-textSecondary transition-colors">404 Directory</Link>
-            <Link to="/403" className="hover:text-textSecondary transition-colors">Security Perimeter</Link>
-            <Link to="/offline" className="hover:text-textSecondary transition-colors">Offline Cache</Link>
-          </div>
         </div>
       </div>
     </footer>
