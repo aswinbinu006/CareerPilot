@@ -1,13 +1,19 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Milestone } from 'lucide-react';
 import gsap from 'gsap';
+import { extractRoadmapFromMarkdown } from '../../utils/pathwayParser';
 
-export default function RoadmapTimeline({ recommendation, stream = '' }) {
+export default function RoadmapTimeline({ recommendation, markdownContent = '', stream = '' }) {
   const [activeYear, setActiveYear] = useState(1);
   const contentRef = useRef(null);
 
   const degree = (recommendation?.recommended_degree || '').toLowerCase();
   const streamLower = (stream || recommendation?.career_stream || '').toLowerCase();
+
+  // Dynamically extract AI-generated roadmap from markdown if present
+  const dynamicRoadmap = useMemo(() => {
+    return extractRoadmapFromMarkdown(markdownContent);
+  }, [markdownContent]);
 
   // Dynamically tailor milestones based on actual recommendation & stream
   const getStreamMilestones = () => {
@@ -194,7 +200,7 @@ export default function RoadmapTimeline({ recommendation, stream = '' }) {
     ];
   };
 
-  const years = getStreamMilestones();
+  const years = dynamicRoadmap.length >= 2 ? dynamicRoadmap : getStreamMilestones();
 
   useEffect(() => {
     const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;

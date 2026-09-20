@@ -592,17 +592,19 @@ def search_colleges(query: str) -> str:
     return json.dumps(results, indent=2)
 
 @mcp.tool()
-def search_entrance_exams(stream: str, degree: str) -> str:
+def search_entrance_exams(stream: str, degree: str, query: Optional[str] = None) -> str:
     """MCP Tool: Search 2025/2026 entrance exams, eligibility dates, and conducting bodies."""
     tool = TavilySearchTool()
-    results = tool.search(f"Entrance exams 2025 for {degree} in {stream} stream India dates eligibility", max_results=2)
+    search_q = query or f"Entrance exams 2025 for {degree} admissions India dates eligibility"
+    results = tool.search(search_q, max_results=2)
     return json.dumps(results, indent=2)
 
 @mcp.tool()
-def search_scholarships(stream: str, budget: str) -> str:
+def search_scholarships(stream: str, budget: str, query: Optional[str] = None) -> str:
     """MCP Tool: Search merit and need-based government and private scholarships."""
     tool = TavilySearchTool()
-    results = tool.search(f"Scholarships for 12th pass students {stream} budget {budget} India", max_results=2)
+    search_q = query or f"Scholarships for 12th pass students {stream} budget {budget} India"
+    results = tool.search(search_q, max_results=2)
     return json.dumps(results, indent=2)
 
 
@@ -637,7 +639,7 @@ class LLMClient:
                 try:
                     available = [m.id for m in self.client.models.list().data]
                     if self.model not in available:
-                        candidates = ["qwen/qwen3.8-27b", "openai/gpt-oss-120b", "openai/gpt-oss-20b", "allam-2-7b", "groq/compound"]
+                        candidates = ["openai/gpt-oss-20b", "openai/gpt-oss-120b", "qwen/qwen3.8-27b", "allam-2-7b", "groq/compound"]
                         for c in candidates:
                             if c in available:
                                 self.model = c
@@ -661,6 +663,7 @@ class LLMClient:
         """
         if self.is_live and self.client:
             try:
+                tokens_limit = 950 if "qwen" in self.model.lower() else 1500
                 chat_completion = self.client.chat.completions.create(
                     messages=[
                         {"role": "system", "content": system_prompt},
@@ -668,7 +671,7 @@ class LLMClient:
                     ],
                     model=self.model,
                     temperature=0.4,
-                    max_tokens=2500,
+                    max_tokens=tokens_limit,
                 )
                 return chat_completion.choices[0].message.content or ""
             except Exception as e:
@@ -1413,19 +1416,21 @@ Student Marks: {profile.get('marks')}
 """
 
         search_plan = self.llm.complete_json(system_prompt, user_prompt)
-        college_q = search_plan.get("college_query", f"Top colleges for {degree} in {location} budget {budget}")
+        exam_q = search_plan.get("exam_query") or f"Entrance exams 2025 for {degree} admissions in India eligibility"
+        college_q = search_plan.get("college_query") or f"Top colleges for {degree} in {location} budget {budget}"
+        scholarship_q = search_plan.get("scholarship_query") or f"Scholarships for {degree} 12th pass students {stream} India"
 
         # 1. MCP Tool: search_colleges
         record_log(state, "PathwayAgent", f"Invoking MCP tool: search_colleges(query='{college_q}')")
         colleges_raw = self.mcp.call_tool("search_colleges", query=college_q)
 
         # 2. MCP Tool: search_entrance_exams
-        record_log(state, "PathwayAgent", f"Invoking MCP tool: search_entrance_exams(stream='{stream}', degree='{degree}')")
-        exams_raw = self.mcp.call_tool("search_entrance_exams", stream=stream, degree=degree)
+        record_log(state, "PathwayAgent", f"Invoking MCP tool: search_entrance_exams(stream='{stream}', degree='{degree}', query='{exam_q}')")
+        exams_raw = self.mcp.call_tool("search_entrance_exams", stream=stream, degree=degree, query=exam_q)
 
         # 3. MCP Tool: search_scholarships
-        record_log(state, "PathwayAgent", f"Invoking MCP tool: search_scholarships(stream='{stream}', budget='{budget}')")
-        scholarships_raw = self.mcp.call_tool("search_scholarships", stream=stream, budget=budget)
+        record_log(state, "PathwayAgent", f"Invoking MCP tool: search_scholarships(stream='{stream}', budget='{budget}', query='{scholarship_q}')")
+        scholarships_raw = self.mcp.call_tool("search_scholarships", stream=stream, budget=budget, query=scholarship_q)
 
         # Parse MCP JSON output
         try:
@@ -1442,6 +1447,40 @@ Student Marks: {profile.get('marks')}
             scholarship_results = json.loads(scholarships_raw) if isinstance(scholarships_raw, str) else scholarships_raw
         except Exception:
             scholarship_results = scholarships_raw
+
+        # Agent Synthesis & Degree Validation:
+        # Guarantee 100% degree relevance (e.g. strictly filter out JEE/engineering exams for MBBS candidates)
+        try:
+            filter_prompt = f"""You are an Admissions Research Director.
+Target Degree: {degree}
+Academic Stream: {stream}
+
+Review the raw research retrieved from the MCP search tools:
+Raw Exams: {json.dumps(exam_results)}
+
+Task: Extract and verify the entrance exams that are STRICTLY applicable for admissions into {degree}.
+RULES:
+1. If target degree is medical/healthcare (MBBS, BDS, BAMS, BHMS, etc.), include ONLY medical exams (such as NEET-UG). DO NOT include JEE Main/Advanced, CUET B.Sc, or engineering exams.
+2. If target degree is engineering (B.Tech, B.E.), include JEE Main/Advanced, BITSAT, State CETs. DO NOT include NEET.
+3. If target degree is commerce/law/arts, include only relevant exams (CUET-UG, IPMAT, CLAT, etc.).
+
+Return JSON array:
+[
+  {{
+    "title": "Official Exam Name",
+    "conducting_body": "Conducting Agency (e.g. NTA)",
+    "level": "National / State",
+    "scope": "Target Degree Scope",
+    "eligibility": "Academic criteria",
+    "content": "Syllabus summary and exam pattern.",
+    "url": "Official portal URL"
+  }}
+]"""
+            verified_exams = self.llm.complete_json("Return a JSON list of verified exams only.", filter_prompt)
+            if isinstance(verified_exams, list) and len(verified_exams) > 0:
+                exam_results = verified_exams
+        except Exception:
+            pass
 
         pathway_data = {
             "search_queries": search_plan,

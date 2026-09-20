@@ -178,6 +178,7 @@ export default function ReportPage() {
             <EntranceExams
               pathwayData={reportData.pathway_research}
               markdownContent={reportData.report_markdown}
+              recommendation={reportData.recommendation}
               stream={reportData.stream}
             />
 
@@ -185,6 +186,7 @@ export default function ReportPage() {
             <CollegesList
               pathwayData={reportData.pathway_research}
               markdownContent={reportData.report_markdown}
+              recommendation={reportData.recommendation}
               stream={reportData.stream}
             />
 
@@ -192,24 +194,28 @@ export default function ReportPage() {
             <ScholarshipsList
               pathwayData={reportData.pathway_research}
               markdownContent={reportData.report_markdown}
+              recommendation={reportData.recommendation}
               stream={reportData.stream}
             />
 
             {/* 7. Four-Year Roadmap */}
             <RoadmapTimeline
               recommendation={reportData.recommendation}
+              markdownContent={reportData.report_markdown}
               stream={reportData.stream}
             />
 
             {/* 8. Emerging Skills */}
             <SkillsRoadmap
               recommendation={reportData.recommendation}
+              markdownContent={reportData.report_markdown}
               stream={reportData.stream}
             />
 
             {/* 9. Backup Options */}
             <BackupOptions
               recommendation={reportData.recommendation}
+              markdownContent={reportData.report_markdown}
               stream={reportData.stream}
             />
 

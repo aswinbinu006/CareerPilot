@@ -2,10 +2,11 @@ import React, { useMemo } from 'react';
 import { GraduationCap, FileCheck, ExternalLink, ShieldCheck, Calendar, Info } from 'lucide-react';
 import { parseEntranceExams } from '../../utils/pathwayParser';
 
-export default function EntranceExams({ pathwayData, markdownContent = '' }) {
+export default function EntranceExams({ pathwayData, markdownContent = '', recommendation }) {
+  const degree = recommendation?.recommended_degree || '';
   const exams = useMemo(() => {
-    return parseEntranceExams(pathwayData?.entrance_exams_data, markdownContent);
-  }, [pathwayData, markdownContent]);
+    return parseEntranceExams(pathwayData?.entrance_exams_data, markdownContent, degree);
+  }, [pathwayData, markdownContent, degree]);
 
   return (
     <div className="w-full mb-12">

@@ -1,9 +1,19 @@
-import React from 'react';
-import { Sparkles, Layers, Terminal, BookMarked, Activity, Scale, Briefcase } from 'lucide-react';
+import React, { useMemo } from 'react';
+import { Sparkles, Layers, Terminal, BookMarked, Activity, Scale, Briefcase, Zap } from 'lucide-react';
+import { extractSkillsFromMarkdown } from '../../utils/pathwayParser';
 
-export default function SkillsRoadmap({ recommendation, stream = '' }) {
+export default function SkillsRoadmap({ recommendation, markdownContent = '', stream = '' }) {
   const degree = (recommendation?.recommended_degree || '').toLowerCase();
   const streamLower = (stream || recommendation?.career_stream || '').toLowerCase();
+
+  const dynamicSkills = useMemo(() => {
+    const rawCats = extractSkillsFromMarkdown(markdownContent);
+    const defaultIcons = [Activity, Layers, BookMarked, Briefcase, Zap];
+    return rawCats.map((cat, idx) => ({
+      ...cat,
+      icon: defaultIcons[idx % defaultIcons.length],
+    }));
+  }, [markdownContent]);
 
   const getStreamSkills = () => {
     // 1. PCB / Medicine, Life Sciences & Healthcare
@@ -101,7 +111,7 @@ export default function SkillsRoadmap({ recommendation, stream = '' }) {
     ];
   };
 
-  const skillCategories = getStreamSkills();
+  const skillCategories = dynamicSkills.length > 0 ? dynamicSkills : getStreamSkills();
 
   return (
     <div className="w-full mb-10">

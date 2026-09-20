@@ -1,11 +1,27 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Shield } from 'lucide-react';
+import { extractBackupFromMarkdown } from '../../utils/pathwayParser';
 
-export default function BackupOptions({ recommendation, stream = '' }) {
-  const backups = Array.isArray(recommendation?.backup_degrees) ? recommendation.backup_degrees : [];
+export default function BackupOptions({ recommendation, markdownContent = '', stream = '' }) {
+  const mdBackups = useMemo(() => {
+    return extractBackupFromMarkdown(markdownContent);
+  }, [markdownContent]);
+
+  const rawBackups = Array.isArray(recommendation?.backup_degrees) ? recommendation.backup_degrees : [];
+
+  // Merge dynamic AI markdown backups with recommendation backup degrees
+  const backups = useMemo(() => {
+    if (mdBackups.length > 0) {
+      return mdBackups;
+    }
+    return rawBackups.map((deg) => ({
+      title: deg,
+      desc: 'Provides parallel lateral eligibility into industry specializations and postgraduate admissions.',
+    }));
+  }, [mdBackups, rawBackups]);
 
   if (backups.length === 0) {
-    return null; // Do not render synthetic contingency degrees if not calculated by the agent
+    return null;
   }
 
   return (
@@ -32,10 +48,10 @@ export default function BackupOptions({ recommendation, stream = '' }) {
             </div>
             <div>
               <h4 className="font-serif text-lg text-textPrimary mb-1">
-                {deg}
+                {deg.title}
               </h4>
               <p className="text-xs text-textSecondary leading-relaxed">
-                Provides parallel lateral eligibility into industry specializations and postgraduate admissions.
+                {deg.desc}
               </p>
             </div>
           </div>
