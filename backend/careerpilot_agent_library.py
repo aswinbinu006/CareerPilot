@@ -1482,6 +1482,74 @@ Return JSON array:
         except Exception:
             pass
 
+        # Synthesize colleges into clean, structured records with points and explanations
+        try:
+            college_prompt = f"""You are an Institutional Admissions Director.
+Target Degree: {degree}
+Academic Stream: {stream}
+Review raw college search results: {json.dumps(college_results)}
+
+Task: Extract and structure the top 4-6 colleges offering {degree}.
+DO NOT output raw markdown tables, pipes (|), or unformatted blobs.
+Provide structured JSON with clean points.
+
+Return JSON array:
+[
+  {{
+    "name": "Full Official College Name",
+    "location": "City, State",
+    "type": "Premier Government / Central Apex" or "Premier Private / Deemed",
+    "rank": "NIRF Ranking (e.g. NIRF #1)",
+    "fee": "Annual or total tuition fee",
+    "points": [
+      "Admission Route: Entrance exam qualification and quota details.",
+      "Infrastructure: Clinical beds / hospital / laboratory facilities.",
+      "Fee & Living: Subsidized or annual tuition and hostel details.",
+      "Career Pathway: Internship rotas, placements, and PG residency standing."
+    ],
+    "explanation": "Clear 2-sentence explanation of why this institution fits the candidate.",
+    "url": "Official portal URL"
+  }}
+]"""
+            verified_colleges = self.llm.complete_json("Return a JSON list of verified colleges only.", college_prompt)
+            if isinstance(verified_colleges, list) and len(verified_colleges) > 0:
+                college_results = verified_colleges
+        except Exception:
+            pass
+
+        # Synthesize scholarships into clean, structured records with points and explanations
+        try:
+            scholarship_prompt = f"""You are a National Scholarship Director.
+Target Degree: {degree}
+Academic Stream: {stream}
+Review raw scholarship search results: {json.dumps(scholarship_results)}
+
+Task: Extract 3-5 verified merit and need-based national/state scholarships for 12th pass students pursuing {degree}.
+DO NOT output raw video descriptions, transcripts, or unformatted text.
+
+Return JSON array:
+[
+  {{
+    "title": "Official Scholarship Scheme Name",
+    "provider": "Ministry of Education / Foundation Name",
+    "amount": "Award Grant (e.g. Up to ₹2,00,000 / Year)",
+    "points": [
+      "Academic Criterion: Class 12 board marks percentage cutoff.",
+      "Family Income Ceiling: Household annual income limit.",
+      "Benefit Scope: Tuition support, book grants, or monthly stipend.",
+      "Disbursement: Direct Benefit Transfer (DBT) into student bank account."
+    ],
+    "explanation": "Clear 2-sentence explanation of the financial support.",
+    "how_to_apply": "Application steps via National Scholarship Portal (scholarships.gov.in) or foundation portal.",
+    "url": "Official portal URL"
+  }}
+]"""
+            verified_scholarships = self.llm.complete_json("Return a JSON list of verified scholarships only.", scholarship_prompt)
+            if isinstance(verified_scholarships, list) and len(verified_scholarships) > 0:
+                scholarship_results = verified_scholarships
+        except Exception:
+            pass
+
         pathway_data = {
             "search_queries": search_plan,
             "entrance_exams_data": exam_results,

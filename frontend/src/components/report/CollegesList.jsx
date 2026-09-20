@@ -13,12 +13,16 @@ import {
 } from 'lucide-react';
 import { parseColleges } from '../../utils/pathwayParser';
 
-export default function CollegesList({ pathwayData, markdownContent = '' }) {
+export default function CollegesList({ pathwayData, markdownContent = '', recommendation = null, stream = '' }) {
   const [activeTab, setActiveTab] = useState('all');
 
   const { colleges, feeTiers, rawSources } = useMemo(() => {
-    return parseColleges(pathwayData?.colleges_data, markdownContent);
-  }, [pathwayData, markdownContent]);
+    return parseColleges(
+      pathwayData?.colleges_data,
+      markdownContent,
+      recommendation?.recommended_degree || ''
+    );
+  }, [pathwayData, markdownContent, recommendation]);
 
   // Tab filtering
   const filteredColleges = useMemo(() => {
@@ -214,10 +218,47 @@ export default function CollegesList({ pathwayData, markdownContent = '' }) {
                     </div>
                   </div>
 
-                  {college.summary && (
-                    <p className="text-xs text-textSecondary leading-relaxed mb-4 line-clamp-3">
-                      {college.summary}
-                    </p>
+                  {/* Structured Highlights & Key Points */}
+                  {college.points && college.points.length > 0 && (
+                    <div className="mb-4">
+                      <span className="text-[10px] font-mono text-accent uppercase tracking-wider block font-semibold mb-2">
+                        Advisory & Admissions Points
+                      </span>
+                      <ul className="space-y-2 text-xs text-textSecondary">
+                        {college.points.map((point, pIdx) => {
+                          const parts = point.split(':');
+                          const title = parts.length > 1 ? parts[0].trim() : '';
+                          const text = parts.length > 1 ? parts.slice(1).join(':').trim() : point;
+
+                          return (
+                            <li
+                              key={pIdx}
+                              className="flex items-start gap-2.5 leading-relaxed bg-background/60 p-2.5 rounded-xl border border-borderMuted/60"
+                            >
+                              <span className="w-1.5 h-1.5 rounded-full bg-accent mt-1.5 shrink-0" />
+                              <div>
+                                {title && (
+                                  <span className="font-semibold text-textPrimary font-sans mr-1">
+                                    {title}:
+                                  </span>
+                                )}
+                                <span>{text}</span>
+                              </div>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* Proper Explanation Box */}
+                  {college.explanation && (
+                    <div className="p-3.5 rounded-xl bg-accent-light/50 border border-accent/20 text-xs text-textSecondary mb-4 leading-relaxed">
+                      <span className="font-semibold text-accent block mb-1 font-mono text-[10px] uppercase tracking-wider">
+                        Institutional Assessment Verdict:
+                      </span>
+                      {college.explanation}
+                    </div>
                   )}
                 </div>
 
