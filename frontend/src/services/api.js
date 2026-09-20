@@ -125,9 +125,12 @@ export const api = {
       sessionStorage.setItem('careerpilot_token', result.token);
       sessionStorage.setItem('careerpilot_user', JSON.stringify(result.user));
       sessionStorage.setItem('careerpilot_last_active', Date.now().toString());
-      // Clean legacy localStorage
+      // Clean legacy localStorage and any un-namespaced session keys
       localStorage.removeItem('careerpilot_token');
       localStorage.removeItem('careerpilot_user');
+      localStorage.removeItem('careerpilot_latest_session_id');
+      localStorage.removeItem('careerpilot_completed_sessions');
+      localStorage.removeItem('careerpilot_completed_sessions_student.demo@careerpilot.edu');
       window.dispatchEvent(new Event('careerpilot_auth_changed'));
     }
     return result;
@@ -142,9 +145,12 @@ export const api = {
       sessionStorage.setItem('careerpilot_token', result.token);
       sessionStorage.setItem('careerpilot_user', JSON.stringify(result.user));
       sessionStorage.setItem('careerpilot_last_active', Date.now().toString());
-      // Clean legacy localStorage
+      // Clean legacy localStorage and any un-namespaced session keys
       localStorage.removeItem('careerpilot_token');
       localStorage.removeItem('careerpilot_user');
+      localStorage.removeItem('careerpilot_latest_session_id');
+      localStorage.removeItem('careerpilot_completed_sessions');
+      localStorage.removeItem('careerpilot_completed_sessions_student.demo@careerpilot.edu');
       window.dispatchEvent(new Event('careerpilot_auth_changed'));
     }
     return result;
@@ -157,6 +163,8 @@ export const api = {
       sessionStorage.removeItem('careerpilot_last_active');
       localStorage.removeItem('careerpilot_token');
       localStorage.removeItem('careerpilot_user');
+      localStorage.removeItem('careerpilot_latest_session_id');
+      localStorage.removeItem('careerpilot_completed_sessions');
       window.dispatchEvent(new Event('careerpilot_auth_changed'));
     } catch {}
   },
@@ -206,55 +214,56 @@ export const api = {
     }
   },
 
-  getRecentSessions: async () => {
+  getRecentSessions: async (params = {}) => {
     try {
-      return await request('/report', { method: 'GET' }, 8000);
+      const qs = params?.user_email ? `?user_email=${encodeURIComponent(params.user_email)}` : '';
+      return await request(`/report${qs}`, { method: 'GET' }, 8000);
     } catch (err) {
       // Return empty array gracefully instead of throwing unhandled error
       return [];
     }
   },
 
-  // Comprehensive session retrieval that unifies live SQLite records and client storage
+  // Strictly user-isolated session retrieval: only returns assessments for the authenticated user
   getUserSessions: async (user = null) => {
     const currentUser = user || getStoredUser();
+    if (!currentUser?.email && !currentUser?.name) {
+      return [];
+    }
+
     let sessions = [];
 
-    // 1. Check live backend SQLite sessions
+    // 1. Check live backend SQLite sessions strictly matching this authenticated student
     try {
-      const res = await api.getRecentSessions();
+      const res = await api.getRecentSessions({ user_email: currentUser.email });
       const list = Array.isArray(res?.recent_sessions)
         ? res.recent_sessions
         : Array.isArray(res)
         ? res
         : [];
 
-      if (currentUser?.name) {
-        const uName = currentUser.name.toLowerCase().trim();
-        const matched = list.filter((s) => {
-          if (!s.student_name) return false;
-          const sName = s.student_name.toLowerCase().trim();
-          return sName.includes(uName) || uName.includes(sName);
-        });
-        if (matched.length > 0) {
-          sessions.push(...matched);
-        }
-      }
+      const userEmail = (currentUser.email || '').toLowerCase().trim();
+      const userName = (currentUser.name || '').toLowerCase().trim();
 
-      // If user name matching was empty, but there is a latest session ID, match it
-      const latestId = localStorage.getItem('careerpilot_latest_session_id');
-      if (latestId && !sessions.some((s) => s.session_id === latestId)) {
-        const match = list.find((s) => s.session_id === latestId);
-        if (match) sessions.push(match);
+      const matched = list.filter((s) => {
+        const sEmail = (s.user_email || '').toLowerCase().trim();
+        const sName = (s.student_name || '').toLowerCase().trim();
+        if (userEmail && sEmail && sEmail === userEmail) return true;
+        if (userName && sName && sName === userName) return true;
+        return false;
+      });
+
+      if (matched.length > 0) {
+        sessions.push(...matched);
       }
     } catch (e) {
       console.warn('Backend session fetch failed:', e);
     }
 
-    // 2. User-specific local storage
+    // 2. User-specific local storage ONLY for this user's email
     if (currentUser?.email) {
       try {
-        const userKey = `careerpilot_completed_sessions_${currentUser.email}`;
+        const userKey = `careerpilot_completed_sessions_${currentUser.email.toLowerCase().trim()}`;
         const localStored = JSON.parse(localStorage.getItem(userKey) || '[]');
         if (Array.isArray(localStored)) {
           localStored.forEach((item) => {
@@ -266,39 +275,7 @@ export const api = {
       } catch {}
     }
 
-    // 3. Any session stored under other completed session keys (e.g., demo or guest accounts)
-    try {
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key && key.startsWith('careerpilot_completed_sessions')) {
-          try {
-            const stored = JSON.parse(localStorage.getItem(key) || '[]');
-            if (Array.isArray(stored)) {
-              stored.forEach((item) => {
-                if (item?.session_id && !sessions.some((s) => s.session_id === item.session_id)) {
-                  sessions.push(item);
-                }
-              });
-            }
-          } catch {}
-        }
-      }
-    } catch {}
-
-    // 4. Latest session ID fallback
-    const latestId = localStorage.getItem('careerpilot_latest_session_id');
-    if (latestId && !sessions.some((s) => s.session_id === latestId)) {
-      sessions.push({
-        session_id: latestId,
-        student_name: currentUser?.name || 'Class 12 Student',
-        recommended_degree: 'Career Guidance Dossier',
-        stream: 'Class 12 Advisory',
-        confidence: 0.94,
-        created_at: new Date().toISOString(),
-      });
-    }
-
-    // 5. Enrich sessions with cached report details if degree or stream is missing/generic
+    // 3. Enrich sessions with cached report details if degree or stream is missing/generic
     sessions = sessions.map((s) => {
       let enriched = { ...s };
       try {

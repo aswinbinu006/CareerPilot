@@ -29,6 +29,11 @@ export default function ProcessingPage() {
     }
 
     try {
+      const user = api.getCurrentUser();
+      if (user?.email && !profileData.user_email) {
+        profileData.user_email = user.email;
+      }
+
       // Call the live FastAPI backend assessment endpoint
       const result = await api.startAssessment(profileData);
 
@@ -36,10 +41,8 @@ export default function ProcessingPage() {
         // Cache result for instant report rendering across sessions & devices
         sessionStorage.setItem(`report_${result.session_id}`, JSON.stringify(result));
         localStorage.setItem(`careerpilot_report_${result.session_id}`, JSON.stringify(result));
-        localStorage.setItem('careerpilot_latest_session_id', result.session_id);
         
         // Track completed session for current user
-        const user = api.getCurrentUser();
         const recommendedDegree =
           result.planner_recommendations?.recommended_degree ||
           result.recommendation?.recommended_degree ||
@@ -58,24 +61,25 @@ export default function ProcessingPage() {
           stream: stream,
           confidence: confidence,
           created_at: new Date().toISOString(),
+          user_email: user?.email || '',
         };
 
         if (user?.email) {
-          const userKey = `careerpilot_completed_sessions_${user.email}`;
+          const userKey = `careerpilot_completed_sessions_${user.email.toLowerCase().trim()}`;
           try {
             const existing = JSON.parse(localStorage.getItem(userKey) || '[]');
             const filtered = existing.filter((item) => item.session_id !== result.session_id);
             filtered.unshift(newEntry);
             localStorage.setItem(userKey, JSON.stringify(filtered));
           } catch {}
+          localStorage.setItem(`careerpilot_latest_session_id_${user.email.toLowerCase().trim()}`, result.session_id);
         }
 
-        // Also track globally so demo / switch accounts retain the generated dossier
+        // Clean up legacy un-namespaced keys to ensure zero cross-account leakage
         try {
-          const globalStored = JSON.parse(localStorage.getItem('careerpilot_completed_sessions') || '[]');
-          const filteredGlobal = globalStored.filter((item) => item.session_id !== result.session_id);
-          filteredGlobal.unshift(newEntry);
-          localStorage.setItem('careerpilot_completed_sessions', JSON.stringify(filteredGlobal));
+          localStorage.removeItem('careerpilot_latest_session_id');
+          localStorage.removeItem('careerpilot_completed_sessions');
+          localStorage.removeItem('careerpilot_completed_sessions_student.demo@careerpilot.edu');
         } catch {}
 
         // Allow the storytelling animations to complete naturally

@@ -355,15 +355,18 @@ def get_report_by_path(session_id: str, format: Optional[str] = Query("json", de
 
 
 @app.get("/report")
-def get_report_query(session_id: Optional[str] = Query(None, description="Session ID")):
+def get_report_query(
+    session_id: Optional[str] = Query(None, description="Session ID"),
+    user_email: Optional[str] = Query(None, description="Filter sessions by student email")
+):
     """
     Alternative query-parameter endpoint for /report?session_id=...
-    If session_id is omitted, returns the latest recent counseling sessions.
+    If session_id is omitted, returns recent counseling sessions, optionally filtered by user_email.
     """
     if session_id:
         return get_report_by_path(session_id)
     
-    recent_sessions = global_db.list_recent_sessions(limit=5)
+    recent_sessions = global_db.list_recent_sessions(limit=10, user_email=user_email)
     return {
         "message": "Specify ?session_id=... to fetch a specific report",
         "recent_sessions": recent_sessions

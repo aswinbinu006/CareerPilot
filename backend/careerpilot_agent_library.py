@@ -136,6 +136,7 @@ if PYDANTIC_AVAILABLE:
         career_goals: str = Field(..., description="Aspirations or lifestyle ambitions")
         budget: str = Field(..., description="Annual or total education budget")
         preferred_location: str = Field(..., description="Preferred state, city, or Open to relocate")
+        user_email: Optional[str] = Field(default="", description="Registered user email")
 else:
     # Minimal fallback dataclass if pydantic is not installed
     @dataclass
@@ -148,6 +149,7 @@ else:
         career_goals: str
         budget: str
         preferred_location: str
+        user_email: str = ""
 
         def model_dump(self):
             return {
@@ -159,6 +161,7 @@ else:
                 "career_goals": self.career_goals,
                 "budget": self.budget,
                 "preferred_location": self.preferred_location,
+                "user_email": self.user_email,
             }
 
 
@@ -197,9 +200,18 @@ class CareerDatabase:
                     confidence REAL,
                     recommended_degree TEXT,
                     state_json TEXT,
-                    report_markdown TEXT
+                    report_markdown TEXT,
+                    user_email TEXT
                 )
             """)
+            # Migration check: Ensure user_email column exists if table was created previously
+            cursor.execute("PRAGMA table_info(career_sessions)")
+            existing_cols = [row[1] for row in cursor.fetchall()]
+            if "user_email" not in existing_cols:
+                try:
+                    cursor.execute("ALTER TABLE career_sessions ADD COLUMN user_email TEXT")
+                except Exception:
+                    pass
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS interaction_traces (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -234,19 +246,25 @@ class CareerDatabase:
         recommended_degree = recommendation.get("recommended_degree", "Undecided")
         state_serialized = json.dumps(state, default=str)
         now = datetime.datetime.now().isoformat()
+        user_email = (
+            profile.get("user_email")
+            or state.get("user_email")
+            or ""
+        ).strip().lower()
 
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""
                 INSERT INTO career_sessions 
-                    (session_id, student_name, stream, created_at, updated_at, confidence, recommended_degree, state_json, report_markdown)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    (session_id, student_name, stream, created_at, updated_at, confidence, recommended_degree, state_json, report_markdown, user_email)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(session_id) DO UPDATE SET
                     updated_at = excluded.updated_at,
                     confidence = excluded.confidence,
                     recommended_degree = excluded.recommended_degree,
                     state_json = excluded.state_json,
-                    report_markdown = excluded.report_markdown
+                    report_markdown = excluded.report_markdown,
+                    user_email = CASE WHEN excluded.user_email != '' THEN excluded.user_email ELSE career_sessions.user_email END
             """, (
                 session_id,
                 profile.get("name", "Anonymous Student"),
@@ -256,7 +274,8 @@ class CareerDatabase:
                 confidence,
                 recommended_degree,
                 state_serialized,
-                report
+                report,
+                user_email
             ))
 
             # Store trace entries in the audit table
@@ -290,15 +309,23 @@ class CareerDatabase:
                     result["state"] = {}
             return result
 
-    def list_recent_sessions(self, limit: int = 10) -> List[Dict[str, Any]]:
-        """Retrieves summary of recent student sessions for viva demonstration."""
+    def list_recent_sessions(self, limit: int = 10, user_email: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Retrieves summary of recent student sessions, optionally scoped to a user email."""
         with self._get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("""
-                SELECT session_id, student_name, stream, recommended_degree, confidence, created_at 
-                FROM career_sessions 
-                ORDER BY created_at DESC LIMIT ?
-            """, (limit,))
+            if user_email and user_email.strip():
+                cursor.execute("""
+                    SELECT session_id, student_name, stream, recommended_degree, confidence, created_at, user_email 
+                    FROM career_sessions 
+                    WHERE LOWER(user_email) = LOWER(?)
+                    ORDER BY created_at DESC LIMIT ?
+                """, (user_email.strip(), limit))
+            else:
+                cursor.execute("""
+                    SELECT session_id, student_name, stream, recommended_degree, confidence, created_at, user_email 
+                    FROM career_sessions 
+                    ORDER BY created_at DESC LIMIT ?
+                """, (limit,))
             return [dict(row) for row in cursor.fetchall()]
 
     def save_mentor_message(

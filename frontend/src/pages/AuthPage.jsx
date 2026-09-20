@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams, useLocation, Link } from 'react-router-do
 import Navbar from '../components/common/Navbar';
 import Footer from '../components/common/Footer';
 import Button from '../components/common/Button';
-import { Compass, Eye, EyeOff, Lock, Mail, User, AlertCircle, ArrowRight, CheckCircle2, Sparkles } from 'lucide-react';
+import { Compass, Eye, EyeOff, Lock, Mail, User, AlertCircle, ArrowRight, CheckCircle2 } from 'lucide-react';
 import gsap from 'gsap';
 import { api } from '../services/api';
 import MagneticButton from '../components/common/MagneticButton';
@@ -62,6 +62,13 @@ export default function AuthPage() {
     setIsLoading(true);
 
     try {
+      // Purge any stale un-namespaced demo or previous account keys
+      try {
+        localStorage.removeItem('careerpilot_latest_session_id');
+        localStorage.removeItem('careerpilot_completed_sessions');
+        localStorage.removeItem('careerpilot_completed_sessions_student.demo@careerpilot.edu');
+      } catch {}
+
       if (isLogin) {
         await api.login({ email, password });
       } else {
@@ -75,29 +82,6 @@ export default function AuthPage() {
         return;
       }
       setError(err.message || 'Authentication failed. Please verify your credentials.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleDemoLogin = async () => {
-    setError('');
-    setIsLoading(true);
-    const demoEmail = 'student.demo@careerpilot.edu';
-    const demoPass = 'Student@2026';
-    const demoName = 'Aarav Patel';
-
-    try {
-      try {
-        await api.login({ email: demoEmail, password: demoPass });
-      } catch {
-        // If demo student doesn't exist in local database yet, create it
-        await api.signup({ email: demoEmail, password: demoPass, name: demoName });
-      }
-      const target = searchParams.get('redirect') || location.state?.from?.pathname || '/dashboard';
-      navigate(target, { replace: true });
-    } catch (err) {
-      setError(err.message || 'Demo login failed. Please try manual sign in or register.');
     } finally {
       setIsLoading(false);
     }
@@ -134,17 +118,6 @@ export default function AuthPage() {
               <span>Please sign in or register to begin your Class 12 career assessment.</span>
             </div>
           )}
-
-          {/* One-Click Demo Access */}
-          <button
-            type="button"
-            onClick={handleDemoLogin}
-            disabled={isLoading}
-            className="w-full py-2.5 px-4 mb-5 rounded-xl bg-secondary hover:bg-secondary/80 text-textPrimary text-xs font-mono font-semibold border border-borderMuted hover:border-accent/40 flex items-center justify-center gap-2 transition-all cursor-pointer active:scale-[0.99]"
-          >
-            <Sparkles className="w-3.5 h-3.5 text-accent" />
-            <span>One-Click Demo Student Access</span>
-          </button>
 
           {/* Toggle Tab */}
           <div className="flex rounded-full bg-background p-1 border border-borderMuted mb-6">

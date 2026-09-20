@@ -22,8 +22,6 @@ import {
   Sparkles,
 } from 'lucide-react';
 
-const STORAGE_KEY = 'careerpilot_assessment_draft';
-
 export default function AssessmentPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -32,6 +30,9 @@ export default function AssessmentPage() {
   const prevStepRef = useRef(1);
 
   const currentUser = api.getCurrentUser();
+  const draftKey = currentUser?.email
+    ? `careerpilot_assessment_draft_${currentUser.email.toLowerCase().trim()}`
+    : 'careerpilot_assessment_draft';
 
   // Historical assessment state
   const [checkingHistory, setCheckingHistory] = useState(true);
@@ -43,7 +44,7 @@ export default function AssessmentPage() {
   // Load initial draft from sessionStorage
   const [formData, setFormData] = useState(() => {
     try {
-      const saved = sessionStorage.getItem(STORAGE_KEY);
+      const saved = sessionStorage.getItem(draftKey);
       if (saved) {
         const parsed = JSON.parse(saved);
         if (!parsed.name && currentUser?.name) parsed.name = currentUser.name;
@@ -101,10 +102,10 @@ export default function AssessmentPage() {
   useEffect(() => {
     if (retakeRequested || previousSessions.length === 0) {
       try {
-        sessionStorage.setItem(STORAGE_KEY, JSON.stringify(formData));
+        sessionStorage.setItem(draftKey, JSON.stringify(formData));
       } catch {}
     }
-  }, [formData, retakeRequested, previousSessions.length]);
+  }, [formData, retakeRequested, previousSessions.length, draftKey]);
 
   // Entrance animation for the retake prompt card
   useEffect(() => {
@@ -175,7 +176,7 @@ export default function AssessmentPage() {
 
   const handleStartRetake = () => {
     try {
-      sessionStorage.removeItem(STORAGE_KEY);
+      sessionStorage.removeItem(draftKey);
     } catch {}
     setRetakeRequested(true);
     setCurrentStep(1);
@@ -184,10 +185,17 @@ export default function AssessmentPage() {
 
   const handleSubmit = async () => {
     setIsSubmitting(true);
+    const submissionData = {
+      ...formData,
+      name: formData.name || currentUser?.name || 'Class 12 Student',
+      user_email: currentUser?.email || '',
+    };
     // Persist finalized data for processing screen
-    sessionStorage.setItem('careerpilot_active_profile', JSON.stringify(formData));
+    sessionStorage.setItem('careerpilot_active_profile', JSON.stringify(submissionData));
     // Clear draft
-    sessionStorage.removeItem(STORAGE_KEY);
+    try {
+      sessionStorage.removeItem(draftKey);
+    } catch {}
     // Navigate to processing storytelling view
     navigate('/processing');
   };
