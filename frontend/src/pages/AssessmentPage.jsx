@@ -80,65 +80,9 @@ export default function AssessmentPage() {
       setCheckingHistory(true);
       try {
         const user = api.getCurrentUser();
-        let sessions = [];
-
-        // 1. Check live SQLite database records via backend
-        try {
-          const res = await api.getRecentSessions();
-          if (res && Array.isArray(res.recent_sessions)) {
-            if (user?.name) {
-              const uName = user.name.toLowerCase().trim();
-              sessions = res.recent_sessions.filter((s) => {
-                if (!s.student_name) return false;
-                const sName = s.student_name.toLowerCase().trim();
-                return sName.includes(uName) || uName.includes(sName);
-              });
-            }
-            // Match with stored session ID if name match wasn't direct
-            if (sessions.length === 0) {
-              const latestId = localStorage.getItem('careerpilot_latest_session_id');
-              if (latestId) {
-                const match = res.recent_sessions.find((s) => s.session_id === latestId);
-                if (match) sessions.push(match);
-              }
-            }
-          }
-        } catch (e) {
-          console.error('Failed to load sessions from API:', e);
-        }
-
-        // 2. Check local user storage history
-        if (user?.email) {
-          try {
-            const userKey = `careerpilot_completed_sessions_${user.email}`;
-            const localStored = JSON.parse(localStorage.getItem(userKey) || '[]');
-            if (Array.isArray(localStored)) {
-              localStored.forEach((item) => {
-                if (!sessions.some((s) => s.session_id === item.session_id)) {
-                  sessions.push(item);
-                }
-              });
-            }
-          } catch {}
-        }
-
-        // 3. Fallback to latest session ID in localStorage if any exists
-        if (sessions.length === 0) {
-          const latestId = localStorage.getItem('careerpilot_latest_session_id');
-          if (latestId) {
-            sessions.push({
-              session_id: latestId,
-              student_name: user?.name || 'Class 12 Student',
-              recommended_degree: 'Career Guidance Dossier',
-              stream: 'Class 12 Advisory',
-              confidence: 0.94,
-              created_at: new Date().toISOString(),
-            });
-          }
-        }
-
+        const sessions = await api.getUserSessions(user);
         if (isMounted) {
-          setPreviousSessions(sessions);
+          setPreviousSessions(sessions || []);
         }
       } finally {
         if (isMounted) {

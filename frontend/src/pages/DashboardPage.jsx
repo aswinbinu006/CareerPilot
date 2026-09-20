@@ -156,12 +156,8 @@ export default function DashboardPage() {
       const user = api.getCurrentUser();
       setCurrentUser(user);
 
-      const response = await api.getRecentSessions();
-      if (response && response.recent_sessions) {
-        setRecentSessions(response.recent_sessions);
-      } else {
-        setRecentSessions([]);
-      }
+      const sessions = await api.getUserSessions(user);
+      setRecentSessions(sessions || []);
     } catch (err) {
       setError(err.message || 'Unable to load dashboard records.');
     } finally {
@@ -171,6 +167,10 @@ export default function DashboardPage() {
 
   useEffect(() => {
     loadData();
+    window.addEventListener('careerpilot_auth_changed', loadData);
+    return () => {
+      window.removeEventListener('careerpilot_auth_changed', loadData);
+    };
   }, []);
 
   // GSAP Entrance and Count-up Animations
@@ -225,6 +225,7 @@ export default function DashboardPage() {
         (recentSessions.reduce((acc, s) => acc + (s.confidence || 0), 0) / totalSessions) * 100
       )
     : null;
+  const latestSession = totalSessions > 0 ? recentSessions[0] : null;
 
   // Compute initials for the avatar
   const studentName = currentUser?.name || 'Class 12 Scholar';
@@ -614,6 +615,15 @@ export default function DashboardPage() {
                   <p className="text-xs text-textSecondary leading-relaxed">
                     Semester milestones, exam cutoffs, scholarships, and backup options.
                   </p>
+                  {totalSessions > 0 && latestSession && (
+                    <Link
+                      to={`/report/${latestSession.session_id}`}
+                      className="inline-flex items-center gap-1.5 text-xs font-mono text-accent font-semibold hover:underline mt-2.5"
+                    >
+                      <span>View Dossier</span>
+                      <ArrowRight className="w-3 h-3" />
+                    </Link>
+                  )}
                 </div>
               </div>
             </div>

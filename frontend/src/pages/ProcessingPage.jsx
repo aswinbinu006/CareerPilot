@@ -33,32 +33,50 @@ export default function ProcessingPage() {
       const result = await api.startAssessment(profileData);
 
       if (result && result.session_id) {
-        // Cache result for instant report rendering
+        // Cache result for instant report rendering across sessions & devices
         sessionStorage.setItem(`report_${result.session_id}`, JSON.stringify(result));
+        localStorage.setItem(`careerpilot_report_${result.session_id}`, JSON.stringify(result));
         localStorage.setItem('careerpilot_latest_session_id', result.session_id);
         
         // Track completed session for current user
         const user = api.getCurrentUser();
+        const recommendedDegree =
+          result.planner_recommendations?.recommended_degree ||
+          result.recommendation?.recommended_degree ||
+          result.degree ||
+          'Career Guidance Dossier';
+        const stream = profileData.stream || 'Class 12 Advisory';
+        const confidence =
+          result.planner_recommendations?.confidence_score ||
+          result.confidence ||
+          0.94;
+
+        const newEntry = {
+          session_id: result.session_id,
+          student_name: user?.name || profileData.name || 'Class 12 Student',
+          recommended_degree: recommendedDegree,
+          stream: stream,
+          confidence: confidence,
+          created_at: new Date().toISOString(),
+        };
+
         if (user?.email) {
           const userKey = `careerpilot_completed_sessions_${user.email}`;
           try {
             const existing = JSON.parse(localStorage.getItem(userKey) || '[]');
-            const newEntry = {
-              session_id: result.session_id,
-              student_name: user.name || profileData.name,
-              recommended_degree:
-                result.planner_recommendations?.recommended_degree ||
-                result.degree ||
-                'Career Guidance Dossier',
-              stream: profileData.stream,
-              confidence: result.planner_recommendations?.confidence_score || 0.94,
-              created_at: new Date().toISOString(),
-            };
             const filtered = existing.filter((item) => item.session_id !== result.session_id);
             filtered.unshift(newEntry);
             localStorage.setItem(userKey, JSON.stringify(filtered));
           } catch {}
         }
+
+        // Also track globally so demo / switch accounts retain the generated dossier
+        try {
+          const globalStored = JSON.parse(localStorage.getItem('careerpilot_completed_sessions') || '[]');
+          const filteredGlobal = globalStored.filter((item) => item.session_id !== result.session_id);
+          filteredGlobal.unshift(newEntry);
+          localStorage.setItem('careerpilot_completed_sessions', JSON.stringify(filteredGlobal));
+        } catch {}
 
         // Allow the storytelling animations to complete naturally
         setTimeout(() => {
