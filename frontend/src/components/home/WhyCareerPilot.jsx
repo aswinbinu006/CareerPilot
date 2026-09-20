@@ -81,7 +81,7 @@ export default function WhyCareerPilot() {
                     <div className="w-10 h-10 rounded-xl bg-background border border-borderMuted flex items-center justify-center text-accent transition-transform duration-300 group-hover:scale-110 group-hover:rotate-6 shadow-2xs">
                       <Icon className="w-5 h-5 stroke-[1.75]" />
                     </div>
-                    <span className="text-[10px] font-mono tracking-widest uppercase text-textSecondary px-2.5 py-1 rounded bg-secondary">
+                    <span className="text-xs font-mono tracking-wider text-textSecondary px-2.5 py-1 rounded bg-secondary">
                       {pillar.tag}
                     </span>
                   </div>
@@ -96,8 +96,8 @@ export default function WhyCareerPilot() {
                 </div>
 
                 <div className="pt-6 mt-6 border-t border-borderMuted/60 text-xs font-mono text-textMuted flex items-center justify-between">
-                  <span>PHASE 0{idx + 1}</span>
-                  <span className="group-hover:text-textPrimary transition-colors">COUNSELING PRINCIPLE</span>
+                  <span>Phase 0{idx + 1}</span>
+                  <span className="group-hover:text-textPrimary transition-colors">Counseling Principle</span>
                 </div>
               </div>
             );

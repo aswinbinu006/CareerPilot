@@ -31,9 +31,9 @@ export default function Footer() {
 
           {/* Column 1: Academic Streams */}
           <div className="md:col-span-2">
-            <h4 className="text-xs font-mono uppercase tracking-widest text-textPrimary mb-4 font-semibold">
+            <h3 className="text-xs font-mono uppercase tracking-widest text-textPrimary mb-4 font-semibold">
               Disciplines
-            </h4>
+            </h3>
             <ul className="space-y-2.5 text-xs font-mono text-textSecondary">
               <li>
                 <Link to="/assessment?stream=pcm" className="hover:text-accent transition-colors">
@@ -60,9 +60,9 @@ export default function Footer() {
 
           {/* Column 2: Advisory Operations */}
           <div className="md:col-span-2">
-            <h4 className="text-xs font-mono uppercase tracking-widest text-textPrimary mb-4 font-semibold">
+            <h3 className="text-xs font-mono uppercase tracking-widest text-textPrimary mb-4 font-semibold">
               Advisory
-            </h4>
+            </h3>
             <ul className="space-y-2.5 text-xs font-mono text-textSecondary">
               <li>
                 <Link to="/assessment" className="hover:text-accent transition-colors">
@@ -89,9 +89,9 @@ export default function Footer() {
 
           {/* Column 3: Legal & Fiduciary */}
           <div className="md:col-span-2">
-            <h4 className="text-xs font-mono uppercase tracking-widest text-textPrimary mb-4 font-semibold">
+            <h3 className="text-xs font-mono uppercase tracking-widest text-textPrimary mb-4 font-semibold">
               Governance
-            </h4>
+            </h3>
             <ul className="space-y-2.5 text-xs font-mono text-textSecondary">
               <li>
                 <Link to="/privacy" className="hover:text-accent transition-colors">
@@ -118,9 +118,9 @@ export default function Footer() {
 
           {/* Column 4: Help & Liaison */}
           <div className="md:col-span-2">
-            <h4 className="text-xs font-mono uppercase tracking-widest text-textPrimary mb-4 font-semibold">
+            <h3 className="text-xs font-mono uppercase tracking-widest text-textPrimary mb-4 font-semibold">
               Assistance
-            </h4>
+            </h3>
             <ul className="space-y-2.5 text-xs font-mono text-textSecondary">
               <li>
                 <Link to="/support" className="hover:text-accent transition-colors">

@@ -30,9 +30,9 @@ export default function Button({
   };
 
   const sizes = {
-    sm: 'text-xs px-3.5 py-1.5 gap-1.5',
-    md: 'text-xs uppercase tracking-wider px-5 py-2.5 gap-2',
-    lg: 'text-sm px-7 py-3.5 gap-2.5',
+    sm: 'text-xs px-4 py-2 gap-1.5 font-medium',
+    md: 'text-sm px-6 py-2.5 gap-2 font-medium',
+    lg: 'text-base px-8 py-3.5 gap-2.5 font-medium',
   };
 
   const buttonContent = (

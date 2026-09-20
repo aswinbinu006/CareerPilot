@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import SectionHeader from '../common/SectionHeader';
-import { ArrowUpRight } from 'lucide-react';
+import { ArrowUpRight, ArrowRight } from 'lucide-react';
 import gsap from 'gsap';
 import ParallaxImage from '../common/ParallaxImage';
 
@@ -96,16 +96,17 @@ export default function CareerCategories() {
   return (
     <section id="streams" className="w-full py-24 bg-secondary/40 border-t border-borderMuted">
       <div className="max-w-7xl mx-auto px-6">
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-10">
+        <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-6 mb-10">
           <SectionHeader
-            tag="STREAM NAVIGATION"
+            tag="Stream Navigation"
             title="Explore academic disciplines with depth."
             description="A curriculum-aligned overview of Class 12 pathways across India. Select any stream to initiate an assessment specifically calibrated to its entrance exams and university options."
             align="left"
+            className="mb-0"
           />
 
-          {/* Interactive Editorial Tabs */}
-          <div className="flex flex-wrap items-center gap-2 p-1.5 rounded-full bg-surface border border-borderMuted self-start md:self-auto">
+          {/* Interactive Editorial Tabs: Unified horizontal line with clear affordance */}
+          <div className="flex items-center gap-2 p-1.5 rounded-full bg-surface border border-borderMuted self-start lg:self-end overflow-x-auto max-w-full">
             {tabs.map((tab) => {
               const isActive = selectedTab === tab.id;
               return (
@@ -113,10 +114,10 @@ export default function CareerCategories() {
                   key={tab.id}
                   onClick={() => setSelectedTab(tab.id)}
                   data-cursor="Select"
-                  className={`px-4 py-1.5 rounded-full text-xs font-mono tracking-wide transition-all duration-200 ${
+                  className={`px-4 py-2 rounded-full text-xs font-mono tracking-wide whitespace-nowrap transition-all duration-200 cursor-pointer ${
                     isActive
-                      ? 'bg-charcoal dark:bg-accent text-white shadow-xs font-semibold'
-                      : 'text-textSecondary hover:text-textPrimary hover:bg-background/60'
+                      ? 'bg-charcoal dark:bg-accent text-white shadow-xs font-semibold border border-charcoal dark:border-accent'
+                      : 'bg-background/80 text-textSecondary border border-borderMuted/80 hover:border-accent/40 hover:text-textPrimary hover:bg-surface'
                   }`}
                 >
                   {tab.label}
@@ -153,7 +154,7 @@ export default function CareerCategories() {
                     <>
                       <div className="absolute inset-0 bg-gradient-to-t from-black/75 dark:from-black/85 via-black/25 to-transparent pointer-events-none" />
                       <div className="absolute bottom-3 left-4 right-4 flex items-center justify-between text-white text-xs font-mono pointer-events-none">
-                        <span>CURRICULUM PROFILE</span>
+                        <span>Curriculum Profile</span>
                         <div className="w-7 h-7 rounded-full bg-white/20 backdrop-blur flex items-center justify-center group-hover:bg-white group-hover:text-[#1C1C1C] group-hover:rotate-45 transition-all duration-300">
                           <ArrowUpRight className="w-4 h-4" />
                         </div>
@@ -169,7 +170,7 @@ export default function CareerCategories() {
                   <h3 className="font-serif text-2xl text-textPrimary group-hover:text-accent transition-colors duration-200 mb-2">
                     {stream.title}
                   </h3>
-                  <p className="text-textSecondary text-xs font-mono uppercase tracking-wide mb-3">
+                  <p className="text-accent dark:text-emerald-400 text-xs font-mono font-medium tracking-wide mb-3">
                     {stream.degrees}
                   </p>
                   <p className="text-textSecondary text-sm leading-relaxed mb-4">
@@ -177,11 +178,17 @@ export default function CareerCategories() {
                   </p>
                 </div>
 
-                <div className="pt-4 border-t border-borderMuted/60 flex items-center justify-between text-xs font-mono text-textMuted">
-                  <span>EXAMS: {stream.keyExams}</span>
-                  <span className="text-accent font-medium group-hover:translate-x-1 transition-transform inline-flex items-center gap-1">
-                    Start Assessment &rarr;
-                  </span>
+                <div className="pt-4 border-t border-borderMuted/60">
+                  <div className="text-xs font-mono text-textSecondary mb-3">
+                    <span className="font-semibold text-textPrimary">Entrance Exams:</span> {stream.keyExams}
+                  </div>
+                  <div className="flex items-center justify-between pt-1">
+                    <span className="text-xs font-mono text-textMuted">Class 12 Advisory</span>
+                    <span className="inline-flex items-center gap-2 px-4 py-2 bg-charcoal dark:bg-accent text-white group-hover:bg-accent rounded-full text-xs font-medium tracking-wide transition-all shadow-xs group-hover:shadow-sm">
+                      <span>Start Assessment</span>
+                      <ArrowRight className="w-3.5 h-3.5 transition-transform duration-200 group-hover:translate-x-1" />
+                    </span>
+                  </div>
                 </div>
               </div>
             </Link>

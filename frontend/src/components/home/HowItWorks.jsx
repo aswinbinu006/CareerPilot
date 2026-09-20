@@ -94,7 +94,7 @@ export default function HowItWorks() {
       <span id="methodology" className="absolute -top-24 pointer-events-none" />
       <div ref={containerRef} className="max-w-7xl mx-auto px-6">
         <SectionHeader
-          tag="AGENTIC ARCHITECTURE"
+          tag="Agentic Architecture"
           title="Four specialized minds. One coherent recommendation."
           description="Unlike single-prompt conversational bots, CareerPilot coordinates four distinct agents via LangGraph. Each specialist contributes their domain expertise to form a verified career dossier."
           align="left"
@@ -102,13 +102,13 @@ export default function HowItWorks() {
 
         {/* Vertical Editorial Timeline */}
         <div className="relative mt-16 max-w-4xl">
-          {/* Background Track Line */}
-          <div className="absolute left-6 md:left-8 top-6 bottom-6 w-[2px] bg-borderMuted" />
+          {/* Background Track Line: Terminating cleanly at final stage icon */}
+          <div className="absolute left-6 md:left-8 top-6 bottom-[88px] md:bottom-[80px] w-[2px] bg-borderMuted" />
 
           {/* Animated Progress Line */}
           <div
             ref={lineRef}
-            className="absolute left-6 md:left-8 top-6 bottom-6 w-[2px] bg-accent z-0"
+            className="absolute left-6 md:left-8 top-6 bottom-[88px] md:bottom-[80px] w-[2px] bg-accent z-0"
           />
 
           <div className="space-y-12">
@@ -117,7 +117,7 @@ export default function HowItWorks() {
               return (
                 <div
                   key={idx}
-                  className="timeline-stage relative flex items-start gap-6 md:gap-10 group"
+                  className="timeline-stage relative flex items-start gap-4 md:gap-6 group"
                 >
                   {/* Step Node with hover micro-interaction */}
                   <div className="relative z-10 flex-shrink-0 w-12 h-12 md:w-16 md:h-16 rounded-full bg-surface border-2 border-borderMuted flex items-center justify-center text-accent shadow-xs group-hover:scale-110 group-hover:border-accent transition-all duration-300">

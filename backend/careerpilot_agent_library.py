@@ -14,9 +14,9 @@ Architecture Overview:
   7. Specialist LLM Agents (Planner, Aptitude, Pathway, Guidance)
   8. LangGraph Orchestration (StateGraph with Conditional Confidence Edge)
   9. High-Level Pipeline Runner (API callable interface)
-  10. Interactive CLI Demo & Viva Inspection Mode (python careerpilot_agent_library.py)
+  10. Interactive CLI Demo & Inspection Mode (python careerpilot_agent_library.py)
 
-Designed to be modular, viva-friendly, and self-contained in a single file.
+Designed to be modular, robust, and self-contained in a single file.
 =============================================================================
 """
 
@@ -29,7 +29,7 @@ import datetime
 from typing import Dict, Any, List, Optional, TypedDict, Callable
 from dataclasses import dataclass
 
-# Ensure Windows PowerShell/CMD UTF-8 compatibility for viva presentations
+# Ensure Windows PowerShell/CMD UTF-8 compatibility for terminal presentations
 if sys.platform == "win32":
     try:
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -40,7 +40,7 @@ if sys.platform == "win32":
 # --------------------------------------------------------------------------- #
 # 1. Configuration & Environment Setup
 # --------------------------------------------------------------------------- #
-# In college vivas, the first question is often: "How does your system configure itself?"
+# System Configuration & Environment Setup
 # Here we load .env settings, set defaults, and declare whether we run live or offline.
 
 try:
@@ -63,10 +63,10 @@ TAVILY_API_KEY = os.getenv("TAVILY_API_KEY", "").strip()
 # SQLite Database storage path
 DATABASE_PATH = os.getenv("DATABASE_PATH", "career_guidance.db")
 
-# Force Offline Mode for local viva demo without internet/API keys
+# Force Offline Mode for local demo without internet/API keys
 OFFLINE_MODE = os.getenv("OFFLINE_MODE", "false").lower() in ("true", "1", "yes")
 
-# Try importing external libraries gracefully so viva demos never crash
+# Try importing external libraries gracefully so demos never crash
 try:
     from groq import Groq
     GROQ_SDK_AVAILABLE = True
@@ -116,7 +116,7 @@ class CareerState(TypedDict, total=False):
     # Guidance Agent's final polished Markdown report
     report: str
     
-    # Blackboard Trace Log for auditability and viva demonstration
+    # Blackboard Trace Log for auditability and system demonstration
     interaction_log: List[Dict[str, str]]
     
     # Internal workflow control
@@ -635,7 +635,7 @@ def search_scholarships(stream: str, budget: str, query: Optional[str] = None) -
     return json.dumps(results, indent=2)
 
 
-# Startup verification of registered MCP tools (visible during boot and viva demonstration)
+# Startup verification of registered MCP tools (visible during boot and system demonstration)
 print(f"[MCP SERVER] '{mcp.name}' online. Registered tools ({len(mcp.list_tools())}):")
 for _tool_info in mcp.list_tools():
     print(f"   * Tool: '{_tool_info['name']}' -> {_tool_info['description']}")
@@ -653,7 +653,7 @@ class LLMClient:
       - Uses Groq Llama-3.3-70B-Versatile when API key is available.
       - Implements one standard call: llm.complete(system_prompt, user_prompt).
       - Provides an intelligent offline fallback reasoning engine so the app
-        never crashes during vivas or network outages.
+        never crashes during demonstrations or network outages.
     """
     def __init__(self, api_key: Optional[str] = None, model: str = DEFAULT_MODEL):
         self.api_key = api_key or GROQ_API_KEY
@@ -704,7 +704,7 @@ class LLMClient:
             except Exception as e:
                 print(f"[WARNING] Groq API request failed ({e}). Switching seamlessly to offline reasoning fallback.")
 
-        # Offline Intelligent Fallback (Ensures viva presentation is 100% bulletproof)
+        # Offline Intelligent Fallback (Ensures system demonstration is 100% bulletproof)
         return self._offline_complete_fallback(system_prompt, user_prompt)
 
     def complete_json(self, system_prompt: str, user_prompt: str) -> Dict[str, Any]:
@@ -947,7 +947,7 @@ class LLMClient:
 
     def _offline_complete_fallback(self, system_prompt: str, user_prompt: str) -> str:
         """
-        Deterministic, realistic fallback reasoning for viva demonstrations
+        Deterministic, realistic fallback reasoning for offline demonstrations
         when Groq API key is missing or offline mode is toggled.
         Extracts the student's actual profile and computes an authentic recommendation.
         """
@@ -2082,16 +2082,16 @@ def run_career_mentor(user_message: str, session_id: Optional[str] = None, user_
 
 
 # --------------------------------------------------------------------------- #
-# 10. Interactive CLI Demo & Viva Inspection Mode
+# 10. Interactive CLI Demo & Inspection Mode
 # --------------------------------------------------------------------------- #
 # The prompt states:
 # "The file should be runnable directly like: python careerpilot_agent_library.py"
 # "The code must look like it was written by a student.
-#  Every section should be explainable within 30 seconds during a viva."
+#  Every section should be explainable within 30 seconds."
 
-def run_viva_cli_demo():
+def run_cli_demo():
     """
-    Interactive Terminal Demo designed for student viva presentations.
+    Interactive Terminal Demo designed for student counseling demonstrations.
     Allows selecting pre-configured realistic 12th pass-out profiles
     (PCM, PCB, Commerce, Arts) or entering a custom profile.
     """
@@ -2101,7 +2101,7 @@ def run_viva_cli_demo():
     print("="*75)
     print(f">> Environment: LLM Live: {global_llm.is_live} | Search Live: {global_search.is_live} | DB: {DATABASE_PATH}")
     print("="*75)
-    print("\nChoose a demonstration profile for your Viva presentation:")
+    print("\nChoose a demonstration profile for your evaluation:")
     print("  [1] Candidate Track 1 - Class 12 PCM (Engineering, Computing & AI)")
     print("  [2] Candidate Track 2 - Class 12 PCB (Medicine, Biotechnology & Healthcare)")
     print("  [3] Candidate Track 3 - Class 12 Commerce (Finance, Markets & CA)")
@@ -2197,8 +2197,8 @@ def run_viva_cli_demo():
     print(result["report_markdown"])
     print("="*75)
     print(f">> Session stored in SQLite memory under ID: {result['session_id']}")
-    print(">> Viva Demonstration Complete!")
+    print(">> Demonstration Complete!")
 
 
 if __name__ == "__main__":
-    run_viva_cli_demo()
+    run_cli_demo()

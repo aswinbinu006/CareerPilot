@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import SectionHeader from '../common/SectionHeader';
-import { Plus } from 'lucide-react';
+import { Plus, Minus } from 'lucide-react';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 
@@ -70,24 +70,25 @@ export default function FAQ() {
     <section id="faq" className="w-full py-24 bg-background border-t border-borderMuted">
       <div ref={containerRef} className="max-w-4xl mx-auto px-6">
         <SectionHeader
-          tag="FACTUAL QUESTIONS"
+          tag="Factual Inquiries"
           title="Frequently asked questions."
           description="Straightforward answers about our counseling methodology, data grounding, and student privacy."
           align="left"
+          className="mb-3"
         />
 
-        <div className="mt-4 text-xs font-mono text-textMuted">
+        <div className="text-xs font-mono text-textMuted mb-6">
           Last updated: September 2026
         </div>
 
-        <div className="divide-y divide-borderMuted border-y border-borderMuted mt-8">
+        <div className="divide-y divide-borderMuted border-y border-borderMuted">
           {faqs.map((faq, idx) => {
             const isOpen = openIndex === idx;
             return (
               <div key={idx} className="faq-item py-6 transition-colors duration-200">
                 <button
                   onClick={() => toggle(idx)}
-                  data-cursor={isOpen ? 'Close' : 'Read'}
+                  data-cursor={isOpen ? 'Collapse' : 'Expand'}
                   className="w-full flex items-center justify-between text-left gap-6 group focus:outline-hidden cursor-pointer"
                   aria-expanded={isOpen}
                 >
@@ -95,13 +96,17 @@ export default function FAQ() {
                     {faq.q}
                   </span>
                   <div
-                    className={`w-9 h-9 rounded-full border border-borderMuted flex items-center justify-center text-textSecondary transition-all duration-300 group-hover:border-accent/40 ${
+                    className={`w-9 h-9 rounded-full border border-borderMuted flex items-center justify-center transition-all duration-300 group-hover:border-accent/40 ${
                       isOpen
-                        ? 'rotate-45 bg-charcoal dark:bg-accent text-white border-charcoal dark:border-accent shadow-xs'
-                        : 'bg-surface hover:bg-surfaceLight rotate-0'
+                        ? 'bg-charcoal dark:bg-accent text-white border-charcoal dark:border-accent shadow-xs'
+                        : 'bg-surface text-textSecondary hover:bg-surfaceLight'
                     }`}
                   >
-                    <Plus className="w-4 h-4 stroke-[2]" />
+                    {isOpen ? (
+                      <Minus className="w-4 h-4 stroke-[2]" />
+                    ) : (
+                      <Plus className="w-4 h-4 stroke-[2]" />
+                    )}
                   </div>
                 </button>
 

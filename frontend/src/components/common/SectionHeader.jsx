@@ -16,7 +16,7 @@ export default function SectionHeader({
   return (
     <div className={`flex flex-col max-w-3xl mb-12 ${alignment[align]} ${className}`}>
       {tag && (
-        <span className="text-[11px] uppercase tracking-[0.2em] font-semibold text-accent mb-3 block">
+        <span className="text-xs font-mono tracking-wider font-semibold text-accent mb-3 block">
           {tag}
         </span>
       )}

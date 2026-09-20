@@ -80,7 +80,7 @@ export default function Hero() {
         {/* Editorial Pill */}
         <div
           ref={pillRef}
-          className="inline-flex items-center gap-2.5 px-3.5 py-1.5 rounded-full bg-surface border border-borderMuted text-xs font-mono text-textSecondary mb-8 shadow-xs"
+          className="inline-flex items-center gap-2.5 px-4 py-2 rounded-full bg-surface border border-borderMuted text-xs font-mono text-textSecondary mb-12 mt-2 shadow-xs"
         >
           <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
           <span>Class 12 Academic & Career Advisory</span>
@@ -110,7 +110,7 @@ export default function Hero() {
               {/* Action Buttons */}
               <div
                 ref={ctaContainerRef}
-                className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 mb-12"
+                className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 mb-10"
               >
                 <Link
                   to="/assessment"
@@ -142,10 +142,10 @@ export default function Hero() {
                 </button>
               </div>
 
-              {/* Quality Indicators */}
+              {/* Quality Indicators - Defined Informational Summary Section */}
               <div
                 ref={indicatorsRef}
-                className="pt-8 border-t border-borderMuted grid grid-cols-3 gap-6 text-xs text-textSecondary font-mono"
+                className="p-5 sm:p-6 rounded-2xl bg-surface border border-borderMuted shadow-xs grid grid-cols-1 sm:grid-cols-3 gap-6 text-xs text-textSecondary font-mono"
               >
                 <div className="hover:translate-y-[-2px] transition-transform duration-200">
                   <span className="block text-textPrimary font-semibold font-sans text-sm mb-0.5">4 Streams</span>
@@ -176,11 +176,11 @@ export default function Hero() {
                     <div className="absolute inset-0 bg-gradient-to-t from-black/75 dark:from-black/85 via-black/20 to-transparent pointer-events-none" />
                     {/* Editorial Caption Card */}
                     <div className="absolute bottom-5 left-5 right-5 z-10 p-5 sm:p-6 rounded-2xl bg-white/95 dark:bg-[#1A1C18]/95 backdrop-blur-md border border-black/10 dark:border-white/10 shadow-2xl transition-transform duration-300 hover:translate-y-[-2px]">
-                      <div className="flex items-center justify-between font-mono text-[11px] mb-2.5">
-                        <span className="text-stone-600 dark:text-stone-300 uppercase tracking-wider font-bold">COUNSELING DOSSIER</span>
-                        <span className="text-accent dark:text-emerald-400 font-bold tracking-wider">VERIFIED NIRF DATA</span>
+                      <div className="flex items-center justify-between font-mono text-xs mb-2.5">
+                        <span className="text-stone-700 dark:text-stone-300 font-semibold tracking-wide">Counseling Dossier</span>
+                        <span className="text-accent dark:text-emerald-400 font-semibold tracking-wide">Verified NIRF Data</span>
                       </div>
-                      <p className="text-stone-900 dark:text-white font-semibold text-xs sm:text-[13px] leading-relaxed">
+                      <p className="text-stone-900 dark:text-white font-semibold text-sm leading-relaxed">
                         Moving 12th pass students from uncertainty to a four-year structured roadmap with measurable milestones.
                       </p>
                     </div>

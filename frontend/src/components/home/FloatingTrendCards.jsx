@@ -52,11 +52,11 @@ export default function FloatingTrendCards() {
             <TrendingUp className="w-4 h-4 stroke-[2]" />
           </div>
           <div className="flex-1 min-w-0">
-            <div className="flex items-center justify-between text-[11px] font-mono text-textSecondary uppercase tracking-wider mb-0.5">
+            <div className="flex items-center justify-between text-xs font-mono text-textSecondary tracking-wide mb-0.5">
               <span>PCM & Computing</span>
               <span className="text-accent font-semibold">+35% Hiring</span>
             </div>
-            <p className="text-xs font-serif text-textPrimary font-normal truncate">
+            <p className="text-sm font-serif text-textPrimary font-normal truncate">
               AI Infrastructure & Computational Systems
             </p>
           </div>
@@ -72,11 +72,11 @@ export default function FloatingTrendCards() {
             <ShieldCheck className="w-4 h-4 stroke-[2]" />
           </div>
           <div className="flex-1 min-w-0">
-            <div className="flex items-center justify-between text-[11px] font-mono text-textSecondary uppercase tracking-wider mb-0.5">
+            <div className="flex items-center justify-between text-xs font-mono text-textSecondary tracking-wide mb-0.5">
               <span>Commerce & Law</span>
               <span className="text-accent font-semibold">+42% Growth</span>
             </div>
-            <p className="text-xs font-serif text-textPrimary font-normal truncate">
+            <p className="text-sm font-serif text-textPrimary font-normal truncate">
               Cyber Law, Fintech & Corporate Compliance
             </p>
           </div>
@@ -92,11 +92,11 @@ export default function FloatingTrendCards() {
             <Activity className="w-4 h-4 stroke-[2]" />
           </div>
           <div className="flex-1 min-w-0">
-            <div className="flex items-center justify-between text-[11px] font-mono text-textSecondary uppercase tracking-wider mb-0.5">
+            <div className="flex items-center justify-between text-xs font-mono text-textSecondary tracking-wide mb-0.5">
               <span>PCB & Healthcare</span>
               <span className="text-accent font-semibold">+28% Demand</span>
             </div>
-            <p className="text-xs font-serif text-textPrimary font-normal truncate">
+            <p className="text-sm font-serif text-textPrimary font-normal truncate">
               Biomedical Genomics & Allied Clinical Care
             </p>
           </div>

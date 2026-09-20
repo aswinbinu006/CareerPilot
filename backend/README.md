@@ -6,7 +6,7 @@
 
 ## Technical Highlights
 
-- **Single-File Core Engine**: [`careerpilot_agent_library.py`](file:///careerpilot_agent_library.py) contains all agent logic, state management, SQLite persistence, MCP tools, and viva CLI demo routines.
+- **Single-File Core Engine**: [`careerpilot_agent_library.py`](file:///careerpilot_agent_library.py) contains all agent logic, state management, SQLite persistence, MCP tools, and interactive CLI demo routines.
 - **LangGraph StateGraph Workflow**: Formal state graph with conditional feedback routing (`confidence < 0.65` triggers revision by `PlannerAgent`).
 - **Model Context Protocol (MCP) Server**: Lightweight `TinyMCPServer` exposing registered educational tools called by `PathwayAgent` via standard `mcp.call_tool()`.
 - **Zero-Failure Offline Resilience**: If network or API credits are unavailable, the system transparently activates offline fallback heuristic engines without crashing.
@@ -143,7 +143,7 @@ Run the test suite to verify bcrypt password hashing, JWT encoding, expiry, and 
 python test_auth_jwt.py
 ```
 
-### 2. Interactive Viva CLI Demo
+### 2. Interactive CLI Demo
 Run the CLI demo to test all 4 streams offline or live:
 ```bash
 python careerpilot_agent_library.py

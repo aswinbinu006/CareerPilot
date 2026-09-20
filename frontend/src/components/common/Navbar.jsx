@@ -4,6 +4,7 @@ import {
   Compass,
   User,
   LogOut,
+  ArrowRight,
   ArrowUpRight,
   Menu,
   X,
@@ -362,7 +363,7 @@ export default function Navbar() {
               <div className="flex items-center gap-3">
                 <Link
                   to="/auth"
-                  className="text-xs uppercase tracking-wider font-semibold text-textSecondary hover:text-textPrimary transition-colors px-3 py-2 cursor-pointer"
+                  className="text-sm font-medium text-textSecondary hover:text-textPrimary transition-colors px-3 py-2 cursor-pointer"
                 >
                   Sign In
                 </Link>
@@ -372,7 +373,7 @@ export default function Navbar() {
                   className="inline-flex items-center gap-2 px-5 py-2.5 bg-charcoal dark:bg-accent hover:bg-accent dark:hover:bg-accent-hover text-white rounded-full text-xs font-medium tracking-wide transition-all duration-200 shadow-sm hover:shadow-md active:scale-[0.98] cursor-pointer group"
                 >
                   <span>Start Free Assessment</span>
-                  <ArrowUpRight className="w-3.5 h-3.5 transition-transform duration-200 group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+                  <ArrowRight className="w-3.5 h-3.5 transition-transform duration-200 group-hover:translate-x-1" />
                 </Link>
               </div>
             )}
@@ -537,7 +538,7 @@ export default function Navbar() {
                 <Link
                   to="/auth"
                   onClick={() => setMobileMenuOpen(false)}
-                  className="w-full block text-center py-3 text-xs uppercase font-mono tracking-wider text-textSecondary hover:text-textPrimary border border-borderMuted rounded-full cursor-pointer"
+                  className="w-full block text-center py-3 text-sm font-medium text-textSecondary hover:text-textPrimary border border-borderMuted rounded-full cursor-pointer transition-colors"
                 >
                   Sign In
                 </Link>
@@ -547,7 +548,7 @@ export default function Navbar() {
                   className="w-full flex items-center justify-center gap-2 py-3.5 bg-charcoal dark:bg-accent text-white rounded-full text-xs uppercase tracking-wider font-semibold shadow-sm cursor-pointer"
                 >
                   <span>Start Free Assessment</span>
-                  <ArrowUpRight className="w-4 h-4" />
+                  <ArrowRight className="w-4 h-4" />
                 </Link>
               </div>
             )}

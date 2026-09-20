@@ -125,9 +125,9 @@ Frontend will be live at: `http://localhost:5173`
 
 ---
 
-## Viva Demonstration Mode
+## Interactive Demonstration Mode
 
-For academic viva, project inspection, or offline demonstrations, you can run the interactive CLI demo directly:
+For project inspection, evaluation, or offline demonstrations, you can run the interactive CLI demo directly:
 
 ```bash
 cd backend
