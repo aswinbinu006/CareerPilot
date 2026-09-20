@@ -177,18 +177,21 @@ export default function ReportPage() {
             {/* 4. Entrance Exams */}
             <EntranceExams
               pathwayData={reportData.pathway_research}
+              markdownContent={reportData.report_markdown}
               stream={reportData.stream}
             />
 
             {/* 5. Recommended Colleges */}
             <CollegesList
               pathwayData={reportData.pathway_research}
+              markdownContent={reportData.report_markdown}
               stream={reportData.stream}
             />
 
             {/* 6. Scholarships & Aid */}
             <ScholarshipsList
               pathwayData={reportData.pathway_research}
+              markdownContent={reportData.report_markdown}
               stream={reportData.stream}
             />
 

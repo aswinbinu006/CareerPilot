@@ -1,18 +1,26 @@
-import React from 'react';
-import { GraduationCap, FileCheck, Info } from 'lucide-react';
+import React, { useMemo } from 'react';
+import { GraduationCap, FileCheck, ExternalLink, ShieldCheck, Calendar, Info } from 'lucide-react';
+import { parseEntranceExams } from '../../utils/pathwayParser';
 
-export default function EntranceExams({ pathwayData }) {
-  const exams = Array.isArray(pathwayData?.entrance_exams_data) ? pathwayData.entrance_exams_data : [];
+export default function EntranceExams({ pathwayData, markdownContent = '' }) {
+  const exams = useMemo(() => {
+    return parseEntranceExams(pathwayData?.entrance_exams_data, markdownContent);
+  }, [pathwayData, markdownContent]);
 
   return (
-    <div className="w-full mb-10">
-      <div className="flex items-center gap-2 text-xs font-mono uppercase tracking-widest text-textSecondary mb-2">
-        <GraduationCap className="w-3.5 h-3.5 text-accent" />
-        <span>ADMISSIONS GATEWAY</span>
+    <div className="w-full mb-12">
+      <div className="flex items-center gap-2 text-xs font-mono uppercase tracking-widest text-accent mb-2">
+        <GraduationCap className="w-3.5 h-3.5" />
+        <span>ADMISSIONS GATEWAY & ENTRANCE CRITERIA</span>
       </div>
-      <h3 className="font-serif text-2xl sm:text-3xl text-textPrimary mb-6">
-        Target Entrance Examinations
-      </h3>
+      <div className="mb-6">
+        <h3 className="font-serif text-2xl sm:text-3xl text-textPrimary">
+          Target Entrance Examinations
+        </h3>
+        <p className="text-xs sm:text-sm text-textSecondary mt-1">
+          Official gateway assessments, eligibility criteria, and conducting apex bodies.
+        </p>
+      </div>
 
       {exams.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -20,34 +28,49 @@ export default function EntranceExams({ pathwayData }) {
             <div
               key={idx}
               data-cursor="Exam"
-              className="p-6 rounded-2xl bg-surface border border-borderMuted flex flex-col justify-between transition-all duration-300 hover:border-accent/50 hover:shadow-xl hover:-translate-y-1.5 group cursor-pointer"
+              className="p-6 rounded-2xl bg-surface border border-borderMuted flex flex-col justify-between transition-all duration-300 hover:border-accent/60 hover:shadow-lg hover:-translate-y-1 group"
             >
               <div>
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-[11px] font-mono text-accent bg-accent-light px-2.5 py-0.5 rounded border border-accent/20">
-                    ADMISSIONS GATEWAY
+                <div className="flex items-center justify-between gap-2 mb-3">
+                  <span className="text-[11px] font-mono text-accent bg-accent/10 px-2.5 py-0.5 rounded-full border border-accent/20 font-semibold">
+                    {exam.conductingBody || 'Apex Conducting Body'}
                   </span>
-                  <div className="w-8 h-8 rounded-full bg-background border border-borderMuted flex items-center justify-center text-textMuted group-hover:text-accent group-hover:scale-110 group-hover:rotate-6 transition-all duration-300">
-                    <FileCheck className="w-4 h-4" />
-                  </div>
+                  {exam.level && (
+                    <span className="text-[11px] font-mono text-textMuted bg-background px-2 py-0.5 rounded border border-borderMuted">
+                      {exam.level}
+                    </span>
+                  )}
                 </div>
-                <h4 className="font-serif text-xl text-textPrimary group-hover:text-accent transition-colors duration-200 mb-2">
-                  {exam.title || 'Official Entrance Examination'}
+
+                <h4 className="font-serif text-xl sm:text-2xl text-textPrimary group-hover:text-accent transition-colors duration-200 mb-2 leading-snug">
+                  {exam.name}
                 </h4>
-                <p className="text-xs text-textSecondary leading-relaxed mb-4">
-                  {exam.content || exam.description || 'Verified examination syllabus and cutoff criteria derived from official conducting bodies.'}
-                </p>
+
+                {exam.scope && (
+                  <div className="text-xs font-mono text-textMuted mb-3 flex items-center gap-1.5">
+                    <ShieldCheck className="w-3.5 h-3.5 text-accent" />
+                    <span>{exam.scope}</span>
+                  </div>
+                )}
+
+                {exam.details && (
+                  <p className="text-xs text-textSecondary leading-relaxed mb-4">
+                    {exam.details}
+                  </p>
+                )}
               </div>
 
               {exam.url && (
-                <div className="pt-4 border-t border-borderMuted/60 text-xs font-mono text-accent">
+                <div className="pt-4 border-t border-borderMuted/60 flex items-center justify-between text-xs font-mono text-accent">
+                  <span className="text-textMuted text-[11px]">Official Portal</span>
                   <a
                     href={exam.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="hover:underline inline-flex items-center gap-1 group-hover:translate-x-1 transition-transform"
+                    className="hover:underline inline-flex items-center gap-1 group-hover:translate-x-0.5 transition-transform"
                   >
-                    Official Examination Portal &rarr;
+                    <span>Examination Portal</span>
+                    <ExternalLink className="w-3 h-3" />
                   </a>
                 </div>
               )}
