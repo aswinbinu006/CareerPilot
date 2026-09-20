@@ -4,7 +4,8 @@
  * Handles authentication tokens, timeouts, network error states, and structured JSON parsing.
  */
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+const rawBaseUrl = import.meta.env.VITE_API_BASE_URL || 'https://careerpilot-backend-1-mja5.onrender.com';
+const API_BASE_URL = rawBaseUrl.replace(/\/+$/, '');
 
 class ApiError extends Error {
   constructor(message, status, details = null) {
@@ -84,7 +85,7 @@ async function request(endpoint, options = {}, timeoutMs = 90000) {
       throw err;
     }
     throw new ApiError(
-      'Unable to connect to the CareerPilot advisory server. Please ensure the backend is running on port 8000.',
+      'Unable to connect to the CareerPilot advisory server. Please check your network connection or verify the backend service is active.',
       0,
       err.message
     );
