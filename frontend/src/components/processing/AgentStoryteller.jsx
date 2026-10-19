@@ -2,8 +2,9 @@ import React, { useEffect, useState, useRef } from 'react';
 import { UserCheck, BrainCircuit, Search, FileText, Check, Clock } from 'lucide-react';
 import gsap from 'gsap';
 
-export default function AgentStoryteller({ studentName = 'Student' }) {
+export default function AgentStoryteller({ studentName = 'Student', isCompleted = false }) {
   const [activeStage, setActiveStage] = useState(0);
+  const [guidanceSubStep, setGuidanceSubStep] = useState(0);
   const containerRef = useRef(null);
   const lineProgressRef = useRef(null);
 
@@ -22,15 +23,15 @@ export default function AgentStoryteller({ studentName = 'Student' }) {
       action: 'Evaluating Psychometric Strengths & Degree Fit',
       detail: 'Analyzing academic alignment, calculating confidence score, and validating cutoff thresholds.',
       icon: BrainCircuit,
-      duration: '4-5s',
+      duration: '3-4s',
     },
     {
       id: 'pathway',
       name: 'Pathway Agent',
       action: 'Researching 2025/2026 Entrance Exams & Institutions',
-      detail: 'Executing real-time searches for NTA calendars, NIRF accredited colleges, state quotas, and scholarships.',
+      detail: 'Executing real-time concurrent searches for NTA calendars, NIRF accredited colleges, state quotas, and scholarships.',
       icon: Search,
-      duration: '4-5s',
+      duration: '3-4s',
     },
     {
       id: 'guidance',
@@ -38,22 +39,41 @@ export default function AgentStoryteller({ studentName = 'Student' }) {
       action: 'Synthesizing Four-Year Actionable Dossier',
       detail: 'Drafting publication-grade recommendations, skills roadmap, semester milestones, and parallel backups.',
       icon: FileText,
-      duration: '3-4s',
+      duration: '4-6s',
     },
   ];
 
-  // Advance stages to communicate progressive mechanical deliberation
+  const guidanceSteps = [
+    'Drafting four-year semester roadmap & career milestones...',
+    'Evaluating NTA entrance exams & cutoff thresholds...',
+    'Compiling verified NIRF colleges & scholarship schemes...',
+    'Polishing final Markdown career guidance report...',
+  ];
+
   useEffect(() => {
-    const timer1 = setTimeout(() => setActiveStage(1), 3200);
-    const timer2 = setTimeout(() => setActiveStage(2), 7500);
-    const timer3 = setTimeout(() => setActiveStage(3), 12500);
+    if (isCompleted) {
+      setActiveStage(4);
+      return;
+    }
+    const timer1 = setTimeout(() => setActiveStage(1), 3000);
+    const timer2 = setTimeout(() => setActiveStage(2), 6500);
+    const timer3 = setTimeout(() => setActiveStage(3), 10500);
 
     return () => {
       clearTimeout(timer1);
       clearTimeout(timer2);
       clearTimeout(timer3);
     };
-  }, []);
+  }, [isCompleted]);
+
+  useEffect(() => {
+    if (activeStage === 3 && !isCompleted) {
+      const interval = setInterval(() => {
+        setGuidanceSubStep((prev) => (prev + 1) % guidanceSteps.length);
+      }, 3500);
+      return () => clearInterval(interval);
+    }
+  }, [activeStage, isCompleted]);
 
   // GSAP animation for connecting line and checkmark pop
   useEffect(() => {
@@ -182,6 +202,15 @@ export default function AgentStoryteller({ studentName = 'Student' }) {
                 <p className="text-xs text-textSecondary leading-relaxed">
                   {stage.detail}
                 </p>
+
+                {isCurrent && idx === 3 && (
+                  <div className="mt-3 pt-3 border-t border-borderMuted/60 flex items-center gap-2.5 animate-fade-in">
+                    <span className="w-2 h-2 rounded-full bg-accent animate-ping flex-shrink-0" />
+                    <span className="text-[11px] sm:text-xs font-mono text-accent font-medium tracking-tight">
+                      {guidanceSteps[guidanceSubStep]}
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
           );

@@ -29,38 +29,50 @@ export default function ReportPage() {
   const [error, setError] = useState(null);
   const articleRef = useRef(null);
 
-  const fetchReport = async () => {
-    setLoading(true);
-    setError(null);
-
-    // Check session cache first for instant load
-    try {
-      const cached = sessionStorage.getItem(`report_${sessionId}`);
-      if (cached) {
-        setReportData(JSON.parse(cached));
-        setLoading(false);
-        return;
-      }
-    } catch {}
-
-    try {
-      const result = await api.getReport(sessionId);
-      if (result) {
-        setReportData(result);
-      } else {
-        throw new Error('Report data not found for this session identifier.');
-      }
-    } catch (err) {
-      setError(err.message || 'Unable to retrieve your career report.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
+    let isMounted = true;
+
+    const loadData = async () => {
+      setLoading(true);
+      setError(null);
+
+      // Check session cache first for instant load
+      try {
+        const cached = sessionStorage.getItem(`report_${sessionId}`);
+        if (cached && isMounted) {
+          setReportData(JSON.parse(cached));
+          setLoading(false);
+          return;
+        }
+      } catch {}
+
+      try {
+        const result = await api.getReport(sessionId);
+        if (isMounted) {
+          if (result) {
+            setReportData(result);
+          } else {
+            throw new Error('Report data not found for this session identifier.');
+          }
+        }
+      } catch (err) {
+        if (isMounted) {
+          setError(err.message || 'Unable to retrieve your career report.');
+        }
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
+    };
+
     if (sessionId) {
-      fetchReport();
+      loadData();
     }
+
+    return () => {
+      isMounted = false;
+    };
   }, [sessionId]);
 
   // Staggered scroll reveals across dossier sections

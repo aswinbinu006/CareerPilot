@@ -49,41 +49,62 @@ export default function FloatingContactButton() {
 
   // Load session info, conversation history, and starters when opened
   useEffect(() => {
+    let isMounted = true;
+
     const initChat = async () => {
       const user = api.getCurrentUser();
-      const latestSessionId = localStorage.getItem('careerpilot_latest_session_id');
+      const userEmail = user?.email ? user.email.toLowerCase().trim() : null;
+      const latestSessionId = userEmail
+        ? localStorage.getItem(`careerpilot_latest_session_id_${userEmail}`)
+        : null;
 
-      // 1. Fetch recent assessment session
+      // 1. Fetch recent assessment session scoped strictly to current student
       let activeSession = null;
       try {
-        const res = await api.getRecentSessions();
-        if (res && Array.isArray(res.recent_sessions) && res.recent_sessions.length > 0) {
+        const res = await api.getRecentSessions(userEmail ? { user_email: userEmail } : {});
+        if (!isMounted) return;
+
+        const sessionsList = Array.isArray(res?.recent_sessions)
+          ? res.recent_sessions
+          : Array.isArray(res)
+          ? res
+          : [];
+
+        if (sessionsList.length > 0) {
           if (latestSessionId) {
-            activeSession = res.recent_sessions.find((s) => s.session_id === latestSessionId);
+            activeSession = sessionsList.find((s) => s.session_id === latestSessionId);
+          }
+          if (!activeSession && userEmail) {
+            activeSession = sessionsList.find(
+              (s) => s.user_email && s.user_email.toLowerCase().trim() === userEmail
+            );
           }
           if (!activeSession && user?.name) {
             const uName = user.name.toLowerCase().trim();
-            activeSession = res.recent_sessions.find(
+            activeSession = sessionsList.find(
               (s) => s.student_name && s.student_name.toLowerCase().trim().includes(uName)
             );
           }
-          if (!activeSession) {
-            activeSession = res.recent_sessions[0];
-          }
+          // For unauthenticated visitors, do NOT guess another student's session.
+          // Require the user to log in or take the assessment first.
         }
       } catch (err) {
         console.error('Failed to load recent session:', err);
       }
 
+      if (!isMounted) return;
       setStudentSession(activeSession);
+      setHasAssessment(!!activeSession);
+
+      const resolvedSessionId = activeSession?.session_id || (userEmail ? latestSessionId : null);
 
       // 2. Fetch starters
       try {
         const starterRes = await api.getMentorStarters(
-          activeSession?.session_id || latestSessionId,
+          resolvedSessionId,
           user?.email
         );
-        if (starterRes && starterRes.starters) {
+        if (isMounted && starterRes && starterRes.starters) {
           setStarters(starterRes.starters);
         }
       } catch {}
@@ -91,9 +112,10 @@ export default function FloatingContactButton() {
       // 3. Fetch conversation history
       try {
         const historyRes = await api.getMentorHistory(
-          activeSession?.session_id || latestSessionId,
+          resolvedSessionId,
           user?.email
         );
+        if (!isMounted) return;
         if (historyRes && Array.isArray(historyRes.history) && historyRes.history.length > 0) {
           setMessages(
             historyRes.history.map((m) => ({
@@ -149,6 +171,10 @@ export default function FloatingContactButton() {
     if (isOpen) {
       initChat();
     }
+
+    return () => {
+      isMounted = false;
+    };
   }, [isOpen]);
 
   // Handle open / close animations
@@ -156,14 +182,19 @@ export default function FloatingContactButton() {
     const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (prefersReducedMotion || !chatWindowRef.current) return;
 
+    let timer = null;
     if (isOpen) {
       gsap.fromTo(
         chatWindowRef.current,
         { opacity: 0, scale: 0.94, y: 20 },
         { opacity: 1, scale: 1, y: 0, duration: 0.35, ease: 'back.out(1.4)' }
       );
-      setTimeout(() => inputRef.current?.focus(), 300);
+      timer = setTimeout(() => inputRef.current?.focus(), 300);
     }
+
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
   }, [isOpen]);
 
   const handleSendMessage = async (textToSend) => {
@@ -171,8 +202,10 @@ export default function FloatingContactButton() {
     if (!text || isTyping) return;
 
     const user = api.getCurrentUser();
+    const userEmail = user?.email ? user.email.toLowerCase().trim() : null;
     const sessionId =
-      studentSession?.session_id || localStorage.getItem('careerpilot_latest_session_id');
+      studentSession?.session_id ||
+      (userEmail ? localStorage.getItem(`careerpilot_latest_session_id_${userEmail}`) : null);
 
     const newUserMsg = {
       id: `user-${Date.now()}`,
@@ -229,8 +262,10 @@ export default function FloatingContactButton() {
 
   const handleClearHistory = async () => {
     const user = api.getCurrentUser();
+    const userEmail = user?.email ? user.email.toLowerCase().trim() : null;
     const sessionId =
-      studentSession?.session_id || localStorage.getItem('careerpilot_latest_session_id');
+      studentSession?.session_id ||
+      (userEmail ? localStorage.getItem(`careerpilot_latest_session_id_${userEmail}`) : null);
     try {
       await api.clearMentorHistory(sessionId, user?.email);
       setMessages([

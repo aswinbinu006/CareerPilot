@@ -17,15 +17,18 @@ All core intelligence and state logic is strictly imported from careerpilot_agen
 import os
 import sqlite3
 import datetime
-from typing import Optional
+import time
+import threading
+from collections import defaultdict
+from typing import Optional, List
 from dotenv import load_dotenv  # type: ignore
 import jwt  # type: ignore
 from passlib.hash import bcrypt  # type: ignore
 
-from fastapi import FastAPI, HTTPException, Query  # type: ignore
+from fastapi import FastAPI, HTTPException, Query, Request, Depends  # type: ignore
 from fastapi.middleware.cors import CORSMiddleware  # type: ignore
 from fastapi.responses import PlainTextResponse  # type: ignore
-from pydantic import BaseModel  # type: ignore
+from pydantic import BaseModel, field_validator  # type: ignore
 
 # Ensure .env configuration is loaded
 env_backend = os.path.join(os.path.dirname(__file__), ".env")
@@ -37,8 +40,10 @@ else:
 # Secure JWT Configuration
 JWT_SECRET = os.getenv("JWT_SECRET", "").strip()
 if not JWT_SECRET:
-    # Use fallback secret to avoid startup crashes in cloud environments if not configured
-    JWT_SECRET = "careerpilot-advisory-jwt-secret-fallback-key-2025"
+    raise RuntimeError(
+        "CRITICAL SECURITY CONFIGURATION ERROR: 'JWT_SECRET' environment variable is not set. "
+        "Set a high-entropy secret string in backend/.env before running the server."
+    )
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_HOURS = 24
 
@@ -52,6 +57,7 @@ from careerpilot_agent_library import (
     global_search,
     global_mentor,
     run_career_mentor,
+    get_database_path,
     DATABASE_PATH,
 )
 
@@ -64,7 +70,7 @@ app = FastAPI(
 
 # Ensure Users table exists for real authentication
 def init_auth_db():
-    with sqlite3.connect(DATABASE_PATH) as conn:
+    with sqlite3.connect(DATABASE_PATH()) as conn:
         cursor = conn.cursor()
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS users (
@@ -84,17 +90,172 @@ class AuthSignupInput(BaseModel):
     password: str
     name: str
 
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, v: str) -> str:
+        v = (v or "").strip().lower()
+        if not v or "@" not in v or "." not in v.split("@")[-1]:
+            raise ValueError("Please enter a valid email address.")
+        return v
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, v: str) -> str:
+        v = (v or "").strip()
+        if not v:
+            raise ValueError("Name is required.")
+        return v
+
 class AuthLoginInput(BaseModel):
     email: str
     password: str
 
-# Enable CORS for React/Next.js frontend integration
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, v: str) -> str:
+        v = (v or "").strip().lower()
+        if not v or "@" not in v:
+            raise ValueError("Please enter a valid email address.")
+        return v
+
+
+# --------------------------------------------------------------------------- #
+# Authentication Dependency
+# --------------------------------------------------------------------------- #
+# Every protected endpoint must pass through `get_current_user`. This is the
+# single chokepoint that verifies the JWT signature, expiry, and that the
+# account still exists in the database. Relying on client-side checks alone
+# means anyone who can send a raw HTTP request bypasses all access control.
+def get_current_user(request: Request) -> dict:
+    auth_header = request.headers.get("Authorization", "")
+    token = None
+    if auth_header.startswith("Bearer "):
+        token = auth_header[7:].strip()
+    if not token:
+        raise HTTPException(status_code=401, detail="Authentication required. Please log in.")
+
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Session expired. Please log in again.")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid or tampered token. Access denied.")
+
+    token_email = (payload.get("email") or "").strip().lower()
+    token_user_id = payload.get("user_id")
+
+    with sqlite3.connect(DATABASE_PATH()) as conn:
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        user = None
+        if token_user_id:
+            cursor.execute("SELECT id, email, name FROM users WHERE id = ?", (token_user_id,))
+            user = cursor.fetchone()
+        if not user and token_email:
+            cursor.execute("SELECT id, email, name FROM users WHERE email = ?", (token_email,))
+            user = cursor.fetchone()
+
+    if not user:
+        raise HTTPException(status_code=401, detail="User account no longer found in database.")
+
+    return {
+        "user_id": user["id"],
+        "email": user["email"],
+        "name": user["name"],
+    }
+
+
+# --------------------------------------------------------------------------- #
+# Rate Limiting
+# --------------------------------------------------------------------------- #
+# Per-IP sliding-window limiter. The assessment and mentor endpoints are
+# expensive (multiple LLM calls + searches), so we cap them to stop abuse
+# and to protect the free-tier API credits.
+class RateLimiter:
+    """Simple per-key fixed-window rate limiter (in-memory, process-local)."""
+
+    def __init__(self, max_calls: int, window_seconds: int):
+        self.max_calls = max_calls
+        self.window_seconds = window_seconds
+        self._buckets: dict = defaultdict(list)
+        self._lock = threading.Lock()
+
+    def allow(self, key: str) -> bool:
+        now = time.time()
+        with self._lock:
+            window_start = now - self.window_seconds
+            self._buckets[key] = [t for t in self._buckets[key] if t > window_start]
+            if len(self._buckets[key]) >= self.max_calls:
+                return False
+            self._buckets[key].append(now)
+            return True
+
+    def reset(self, key: str) -> None:
+        with self._lock:
+            self._buckets.pop(key, None)
+
+
+ASSESSMENT_LIMITER = RateLimiter(max_calls=10, window_seconds=3600)   # 10 assessments / hour
+MENTOR_LIMITER = RateLimiter(max_calls=60, window_seconds=3600)       # 60 mentor chats / hour
+
+
+def rate_limit(request: Request, limiter: RateLimiter, detail: str) -> None:
+    """Raises 429 when the caller has exceeded their quota."""
+    client_ip = request.client.host if request.client else "unknown"
+    if not limiter.allow(client_ip):
+        raise HTTPException(status_code=429, detail=detail)
+
+
+# --------------------------------------------------------------------------- #
+# Input Validation for the Assessment Intake
+# --------------------------------------------------------------------------- #
+VALID_STREAMS = {"PCM", "PCB", "Commerce", "Arts", "PCM (Physics, Chemistry, Maths)",
+                 "PCB (Physics, Chemistry, Biology)", "Commerce with Maths",
+                 "Arts / Humanities"}
+MAX_FIELD_LENGTH = 500
+
+
+def validate_assessment_fields(profile: dict) -> None:
+    """Rejects malformed or over-long intake fields before they reach the LLM."""
+    required = ["name", "stream", "marks", "favorite_subjects", "interests",
+                "career_goals", "budget", "preferred_location"]
+    for field in required:
+        val = profile.get(field)
+        if val is None or not str(val).strip():
+            raise HTTPException(status_code=400, detail=f"Missing required field: {field}")
+        if len(str(val)) > MAX_FIELD_LENGTH:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Field '{field}' exceeds the {MAX_FIELD_LENGTH} character limit.",
+            )
+
+    stream = str(profile.get("stream", "")).strip()
+    if stream not in VALID_STREAMS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid stream '{stream}'. Must be one of: PCM, PCB, Commerce, Arts.",
+        )
+
+# Enable CORS for the React frontend integration.
+# allow_origins MUST be an explicit list when allow_credentials=True. A wildcard
+# origin with credentials is rejected by browsers and effectively grants every
+# site credentialed access to this API.
+CORS_ORIGINS = [
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:5173",
+    "https://careerpilot-frontend.vercel.app",
+    "https://careerpilot-frontend-1.onrender.com",
+]
+CORS_ORIGINS = [o.strip() for o in os.getenv("CORS_ORIGINS", "").split(",") if o.strip()] or CORS_ORIGINS
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Adjust to frontend port in production
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "DELETE", "HEAD", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-Requested-With"],
 )
 
 
@@ -136,7 +297,7 @@ def signup(data: AuthSignupInput):
     # Securely hash password using bcrypt (automatic per-user random salt)
     pwd_hash = bcrypt.hash(data.password)
     try:
-        with sqlite3.connect(DATABASE_PATH) as conn:
+        with sqlite3.connect(DATABASE_PATH()) as conn:
             cursor = conn.cursor()
             cursor.execute(
                 "INSERT INTO users (email, name, password_hash) VALUES (?, ?, ?)",
@@ -194,7 +355,7 @@ def login(data: AuthLoginInput):
             # Lockout period expired; reset attempt counter
             FAILED_LOGIN_ATTEMPTS.pop(email, None)
 
-    with sqlite3.connect(DATABASE_PATH) as conn:
+    with sqlite3.connect(DATABASE_PATH()) as conn:
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM users WHERE email = ?", (email,))
@@ -248,19 +409,33 @@ def login(data: AuthLoginInput):
 
 @app.get("/auth/validate")
 def validate_session(
+    request: Request,
     email: Optional[str] = Query(None, description="User email"),
-    token: Optional[str] = Query(None, description="Token")
+    token: Optional[str] = Query(None, description="Deprecated: use the Authorization header instead"),
 ):
     """
     Validates JWT signature and expiry, and verifies user exists in SQLite.
     Returns 401 on expired, malformed, or tampered tokens.
+
+    The token is read from the `Authorization: Bearer <token>` header. Passing
+    it as a query parameter is deprecated: query strings are written to browser
+    history, server logs, and Referer headers, which is a session-leak vector.
     """
-    if not token:
+    # Prefer the Authorization header; fall back to the query string only for
+    # legacy clients so existing integrations don't silently break.
+    auth_header = request.headers.get("Authorization", "")
+    active_token = None
+    if auth_header.startswith("Bearer "):
+        active_token = auth_header[7:].strip()
+    elif token:
+        active_token = token.strip()
+
+    if not active_token:
         raise HTTPException(status_code=401, detail="Authentication token required.")
 
     # Decode and verify JWT signature and expiration
     try:
-        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        payload = jwt.decode(active_token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Session expired. Please log in again.")
     except jwt.InvalidTokenError:
@@ -275,7 +450,7 @@ def validate_session(
 
     # Confirm user still exists in the database (e.g. not deleted or cleared)
     user = None
-    with sqlite3.connect(DATABASE_PATH) as conn:
+    with sqlite3.connect(DATABASE_PATH()) as conn:
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
         if token_user_id:
@@ -299,19 +474,48 @@ def validate_session(
 
 
 @app.post("/assessment")
-def create_career_assessment(profile: StudentProfileInput):
+def create_career_assessment(
+    profile: StudentProfileInput,
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+):
     """
     Submits student profile and runs the 4-agent LangGraph workflow:
     Planner -> Aptitude -> (Conditional Check) -> Pathway -> Guidance.
     Returns complete recommendation, confidence score, and blackboard execution logs.
+
+    AUTHENTICATED ONLY. The student's identity is taken from the JWT, not from
+    the request body: a client-supplied `user_email` is treated as a hint at
+    most, and a mismatch with the token is rejected. This is what makes session
+    isolation real instead of merely claimed.
     """
+    # Rate limit the expensive multi-agent pipeline per caller
+    rate_limit(request, ASSESSMENT_LIMITER,
+               "Too many assessments. Please wait before running another evaluation.")
+
     try:
         # Extract student dictionary from Pydantic model
         student_data = profile.model_dump() if hasattr(profile, "model_dump") else profile.__dict__
-        
+
+        # Bind the session to the authenticated user's identity.
+        body_email = (student_data.get("user_email") or "").strip().lower()
+        token_email = (current_user.get("email") or "").strip().lower()
+        if body_email and body_email != token_email:
+            raise HTTPException(
+                status_code=403,
+                detail="The user_email in your request does not match your logged-in account.",
+            )
+        student_data["user_email"] = token_email
+        student_data["user_id"] = current_user.get("user_id")
+
+        # Validate field shapes before they reach the LLM
+        validate_assessment_fields(student_data)
+
         # Execute LangGraph pipeline from careerpilot_agent_library
         result = run_career_guidance(student_data)
         return result
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Assessment workflow error: {str(e)}")
 
@@ -384,62 +588,114 @@ class MentorChatRequest(BaseModel):
 
 
 @app.post("/mentor/chat")
-def mentor_chat(req: MentorChatRequest):
+def mentor_chat(
+    req: MentorChatRequest,
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+):
     """
     Career Mentor AI: Conversational Guidance Endpoint.
     Context-aware dialogue answering student follow-up questions,
     explaining recommendations, providing study roadmaps, and utilizing Pathway Agent tools.
+
+    AUTHENTICATED ONLY. The caller's identity comes from the JWT; a client-supplied
+    `user_email` is a hint at most and a mismatch is rejected, so one student can
+    never read or steer another student's mentor conversation.
     """
     if not req.message or not req.message.strip():
         raise HTTPException(status_code=400, detail="Message cannot be empty.")
-    
+
+    rate_limit(request, MENTOR_LIMITER,
+               "Too many mentor messages. Please slow down and try again shortly.")
+
+    token_email = (current_user.get("email") or "").strip().lower()
+    body_email = (req.user_email or "").strip().lower()
+    if body_email and body_email != token_email:
+        raise HTTPException(
+            status_code=403,
+            detail="The user_email in your request does not match your logged-in account.",
+        )
+
     return run_career_mentor(
         user_message=req.message.strip(),
         session_id=req.session_id,
-        user_email=req.user_email
+        user_email=token_email,
     )
 
 
 @app.get("/mentor/history")
 def get_mentor_history(
+    request: Request,
     session_id: Optional[str] = Query(None, description="Session ID"),
-    user_email: Optional[str] = Query(None, description="User Email")
+    user_email: Optional[str] = Query(None, description="User Email"),
+    current_user: dict = Depends(get_current_user),
 ):
     """
     Retrieves preserved conversation memory for the Career Mentor.
+    Scoped to the authenticated user only.
     """
-    history = global_db.get_mentor_history(session_id=session_id, user_email=user_email, limit=30)
+    token_email = (current_user.get("email") or "").strip().lower()
+    body_email = (user_email or "").strip().lower()
+    if body_email and body_email != token_email:
+        raise HTTPException(
+            status_code=403,
+            detail="The user_email in your request does not match your logged-in account.",
+        )
+
+    history = global_db.get_mentor_history(session_id=session_id, user_email=token_email, limit=30)
     return {"history": history}
 
 
 @app.delete("/mentor/history")
 def clear_mentor_history(
+    request: Request,
     session_id: Optional[str] = Query(None, description="Session ID"),
-    user_email: Optional[str] = Query(None, description="User Email")
+    user_email: Optional[str] = Query(None, description="User Email"),
+    current_user: dict = Depends(get_current_user),
 ):
     """
     Clears preserved conversation memory for the Career Mentor.
+    Scoped to the authenticated user only.
     """
-    success = global_db.clear_mentor_history(session_id=session_id, user_email=user_email)
+    token_email = (current_user.get("email") or "").strip().lower()
+    body_email = (user_email or "").strip().lower()
+    if body_email and body_email != token_email:
+        raise HTTPException(
+            status_code=403,
+            detail="The user_email in your request does not match your logged-in account.",
+        )
+
+    success = global_db.clear_mentor_history(session_id=session_id, user_email=token_email)
     return {"status": "cleared" if success else "failed"}
 
 
 @app.get("/mentor/starters")
 def get_mentor_starters(
+    request: Request,
     session_id: Optional[str] = Query(None, description="Session ID"),
-    user_email: Optional[str] = Query(None, description="User Email")
+    user_email: Optional[str] = Query(None, description="User Email"),
+    current_user: dict = Depends(get_current_user),
 ):
     """
     Returns dynamically tailored conversation starters based on the student's 12th stream.
+    Scoped to the authenticated user's latest session.
     """
+    token_email = (current_user.get("email") or "").strip().lower()
+    body_email = (user_email or "").strip().lower()
+    if body_email and body_email != token_email:
+        raise HTTPException(
+            status_code=403,
+            detail="The user_email in your request does not match your logged-in account.",
+        )
+
     stream = "PCM"
     degree = ""
     session = None
     if session_id:
         session = global_db.load_session(session_id)
-    if not session and user_email:
-        session = global_db.find_latest_session_by_user(user_email=user_email)
-    
+    if not session:
+        session = global_db.find_latest_session_by_user(user_email=token_email)
+
     if session:
         stream = session.get("stream") or session.get("state", {}).get("profile", {}).get("stream", "PCM")
         degree = session.get("recommended_degree") or ""

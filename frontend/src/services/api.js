@@ -69,15 +69,33 @@ async function request(endpoint, options = {}, timeoutMs = 90000) {
         // If unauthorized/unauthenticated, clear session state immediately
         api.logout();
       }
+      if (response.status >= 500) {
+        window.dispatchEvent(new CustomEvent('careerpilot_backend_status', {
+          detail: { isDown: true, status: response.status, message: 'Server unavailable' }
+        }));
+      }
       const errorMsg = (typeof data === 'object' && data?.detail)
         ? data.detail
         : `Request failed with status ${response.status}`;
       throw new ApiError(errorMsg, response.status, data);
     }
 
+    // Response succeeded - notify listeners that backend is reachable
+    window.dispatchEvent(new CustomEvent('careerpilot_backend_status', {
+      detail: { isDown: false, status: response.status }
+    }));
+
     return data;
   } catch (err) {
     clearTimeout(timeoutId);
+
+    // Notify listeners if connection failed, timed out, or returned 5xx
+    if (err.name === 'AbortError' || !(err instanceof ApiError) || err.status === 0 || (err.status >= 500 && err.status <= 599)) {
+      window.dispatchEvent(new CustomEvent('careerpilot_backend_status', {
+        detail: { isDown: true, error: err.message, status: err.status || 0 }
+      }));
+    }
+
     if (err.name === 'AbortError') {
       throw new ApiError('The request timed out. The AI guidance pipeline is deliberating deeply, please retry.', 408);
     }
@@ -107,11 +125,19 @@ export const api = {
   getToken: () => getStoredToken(),
 
   // System Health
-  checkHealth: async () => {
+  checkHealth: async (timeoutMs = 6000) => {
     try {
-      return await request('/health', { method: 'GET' }, 5000);
+      const res = await request('/health', { method: 'GET' }, timeoutMs);
+      const isHealthy = res && (res.status === 'healthy' || res.status === 'ok');
+      window.dispatchEvent(new CustomEvent('careerpilot_backend_status', {
+        detail: { isDown: !isHealthy, data: res }
+      }));
+      return { status: isHealthy ? 'healthy' : 'offline', data: res };
     } catch (err) {
-      return { status: 'offline', error: err.message };
+      window.dispatchEvent(new CustomEvent('careerpilot_backend_status', {
+        detail: { isDown: true, error: err.message, status: err.status || 0 }
+      }));
+      return { status: 'offline', error: err.message, statusCode: err.status || 0 };
     }
   },
 
@@ -156,15 +182,31 @@ export const api = {
     return result;
   },
 
+  getStorageKey: (baseKey, user = null) => {
+    const u = user || getStoredUser();
+    if (u?.email) {
+      return `${baseKey}_${u.email.toLowerCase().trim()}`;
+    }
+    return baseKey;
+  },
+
   logout: () => {
     try {
+      const u = getStoredUser();
+      const userEmail = u?.email ? u.email.toLowerCase().trim() : null;
       sessionStorage.removeItem('careerpilot_token');
       sessionStorage.removeItem('careerpilot_user');
       sessionStorage.removeItem('careerpilot_last_active');
+      sessionStorage.removeItem('careerpilot_active_profile');
       localStorage.removeItem('careerpilot_token');
       localStorage.removeItem('careerpilot_user');
       localStorage.removeItem('careerpilot_latest_session_id');
       localStorage.removeItem('careerpilot_completed_sessions');
+      if (userEmail) {
+        localStorage.removeItem(`careerpilot_latest_session_id_${userEmail}`);
+        localStorage.removeItem(`careerpilot_completed_sessions_${userEmail}`);
+        sessionStorage.removeItem(`careerpilot_assessment_draft_${userEmail}`);
+      }
       window.dispatchEvent(new Event('careerpilot_auth_changed'));
     } catch {}
   },
@@ -179,9 +221,11 @@ export const api = {
 
     try {
       const emailParam = encodeURIComponent(user?.email || '');
-      const tokenParam = encodeURIComponent(token || '');
-      const res = await request(`/auth/validate?email=${emailParam}&token=${tokenParam}`, {
+      // Send token in Authorization header (preferred); the backend still accepts
+      // the query string for legacy compatibility but headers don't end up in logs/history.
+      const res = await request(`/auth/validate?email=${emailParam}`, {
         method: 'GET',
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
       }, 5000);
       if (res && res.valid) {
         return true;
@@ -205,9 +249,15 @@ export const api = {
     try {
       return await request(`/report/${sessionId}?format=json`, { method: 'GET' });
     } catch (err) {
-      // Fallback to local session storage cache if server is offline
+      // Fallback to local session storage cache if server is offline.
+      // The cache key is scoped to the current user's email to prevent
+      // cross-user leakage when localStorage is shared.
       try {
-        const cached = localStorage.getItem(`careerpilot_report_${sessionId}`);
+        const user = getStoredUser();
+        const userKey = user?.email
+          ? `careerpilot_report_${user.email.toLowerCase().trim()}_${sessionId}`
+          : `careerpilot_report_${sessionId}`;
+        const cached = localStorage.getItem(userKey);
         if (cached) return JSON.parse(cached);
       } catch {}
       throw err;
@@ -216,7 +266,9 @@ export const api = {
 
   getRecentSessions: async (params = {}) => {
     try {
-      const qs = params?.user_email ? `?user_email=${encodeURIComponent(params.user_email)}` : '';
+      const currentUser = getStoredUser();
+      const email = params?.user_email || currentUser?.email || '';
+      const qs = email ? `?user_email=${encodeURIComponent(email)}` : '';
       return await request(`/report${qs}`, { method: 'GET' }, 8000);
     } catch (err) {
       // Return empty array gracefully instead of throwing unhandled error
@@ -289,7 +341,6 @@ export const api = {
             enriched.recommended_degree === 'Career Guidance Dossier'
           ) {
             enriched.recommended_degree =
-              rep.planner_recommendations?.recommended_degree ||
               rep.recommendation?.recommended_degree ||
               rep.degree ||
               enriched.recommended_degree;

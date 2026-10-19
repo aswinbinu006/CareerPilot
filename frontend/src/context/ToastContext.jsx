@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
-import { CheckCircle2, AlertCircle, Info, X } from 'lucide-react';
+import { CheckCircle2, AlertCircle, Info, X, AlertTriangle } from 'lucide-react';
 
 const ToastContext = createContext({
   showToast: () => {},
@@ -36,6 +36,9 @@ export function ToastProvider({ children }) {
             )}
             {toast.type === 'error' && (
               <AlertCircle className="w-4 h-4 text-red-600 stroke-[2.5]" />
+            )}
+            {toast.type === 'warning' && (
+              <AlertTriangle className="w-4 h-4 text-amber-500 stroke-[2.5]" />
             )}
             {toast.type === 'info' && (
               <Info className="w-4 h-4 text-textSecondary stroke-[2]" />

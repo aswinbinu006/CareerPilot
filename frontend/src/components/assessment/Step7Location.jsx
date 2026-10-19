@@ -11,7 +11,7 @@ export default function Step7Location({ data, onChange, onNext }) {
     'Chennai / Tamil Nadu',
     'Hyderabad / Telangana',
     'Kolkata / Eastern India',
-    'Close to Home / Local State Only',
+    'North / Central India (Jaipur, Lucknow, Chandigarh)',
   ];
 
   const handleSelect = (loc) => {

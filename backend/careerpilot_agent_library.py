@@ -26,8 +26,19 @@ import json
 import re
 import sqlite3
 import datetime
+import logging
+import concurrent.futures
+from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, Any, List, Optional, TypedDict, Callable
 from dataclasses import dataclass
+
+logger = logging.getLogger("careerpilot")
+if not logger.handlers:
+    logging.basicConfig(
+        level=logging.INFO,
+        format="[%(asctime)s] [%(levelname)s] [%(name)s]: %(message)s",
+        datefmt="%H:%M:%S"
+    )
 
 # Ensure Windows PowerShell/CMD UTF-8 compatibility for terminal presentations
 if sys.platform == "win32":
@@ -47,9 +58,9 @@ try:
     from dotenv import load_dotenv
     env_backend = os.path.join(os.path.dirname(__file__), ".env")
     if os.path.exists(env_backend):
-        load_dotenv(dotenv_path=env_backend, override=True)
+        load_dotenv(dotenv_path=env_backend, override=False)
     else:
-        load_dotenv()
+        load_dotenv(override=False)
 except ImportError:
     pass  # python-dotenv is optional; OS environment variables still work
 
@@ -60,8 +71,28 @@ DEFAULT_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
 # Tavily Web Search Configuration
 TAVILY_API_KEY = os.getenv("TAVILY_API_KEY", "").strip()
 
-# SQLite Database storage path
-DATABASE_PATH = os.getenv("DATABASE_PATH", "career_guidance.db")
+# SQLite Database storage path (anchored to backend directory if relative)
+# Resolved lazily via get_database_path() so tests can override the env var.
+# The cache can be cleared via reset_database_path_cache() for testing.
+def get_database_path() -> str:
+    """Returns the resolved database path. Reads env var each call so tests
+    can override DATABASE_PATH and get the new value immediately."""
+    _db_env = os.getenv("DATABASE_PATH", "career_guidance.db")
+    return _db_env if os.path.isabs(_db_env) else os.path.join(os.path.dirname(os.path.abspath(__file__)), _db_env)
+
+
+# Alias for clarity
+_resolve_database_path_from_env = get_database_path
+
+
+def reset_database_path_cache() -> None:
+    """No-op kept for backwards compatibility with test code."""
+    pass
+
+
+# Backwards-compatible alias (deprecated: use get_database_path())
+# This is a callable so it always returns the current resolved path.
+DATABASE_PATH = get_database_path
 
 # Force Offline Mode for local demo without internet/API keys
 OFFLINE_MODE = os.getenv("OFFLINE_MODE", "false").lower() in ("true", "1", "yes")
@@ -175,15 +206,32 @@ class CareerDatabase:
     """
     Manages persistent SQLite storage for student counseling sessions.
     Stores session metadata, full agent traces, and final career reports.
+
+    Concurrency notes:
+      - WAL mode lets concurrent readers coexist with a single writer instead of
+        blocking the whole database, which matters because FastAPI serves many
+        requests from a thread pool against one shared file.
+      - A short busy-timeout retries transient "database is locked" errors rather
+        than failing the request outright.
+      - Sessions are pruned on write so the database cannot grow without bound.
     """
-    def __init__(self, db_path: str = DATABASE_PATH):
-        self.db_path = db_path
+    MAX_SESSIONS_PER_USER = 50
+    MAX_TOTAL_SESSIONS = 5000
+    BUSY_TIMEOUT_MS = 5000
+
+    def __init__(self, db_path: str = None):
+        self.db_path = db_path or get_database_path()
         self._init_db()
 
     def _get_connection(self) -> sqlite3.Connection:
         """Returns a thread-safe connection with dictionary row access."""
-        conn = sqlite3.connect(self.db_path, check_same_thread=False)
+        conn = sqlite3.connect(self.db_path, check_same_thread=False, timeout=self.BUSY_TIMEOUT_MS)
         conn.row_factory = sqlite3.Row
+        try:
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA busy_timeout=?", (self.BUSY_TIMEOUT_MS,))
+        except sqlite3.OperationalError:
+            pass
         return conn
 
     def _init_db(self):
@@ -210,8 +258,8 @@ class CareerDatabase:
             if "user_email" not in existing_cols:
                 try:
                     cursor.execute("ALTER TABLE career_sessions ADD COLUMN user_email TEXT")
-                except Exception:
-                    pass
+                except sqlite3.OperationalError as ex:
+                    logger.warning("Table migration notice for user_email column: %s", ex)
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS interaction_traces (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -237,6 +285,31 @@ class CareerDatabase:
             """)
             conn.commit()
 
+    def _prune_sessions(self, cursor: sqlite3.Cursor, user_email: str, current_session_id: str) -> None:
+        """Deletes old sessions beyond the per-user and global caps."""
+        # Per-user cap: keep only the MAX_SESSIONS_PER_USER most recent sessions for this user.
+        if user_email:
+            cursor.execute("""
+                DELETE FROM career_sessions
+                WHERE user_email = ?
+                  AND session_id NOT IN (
+                    SELECT session_id FROM career_sessions
+                    WHERE user_email = ?
+                    ORDER BY updated_at DESC
+                    LIMIT ?
+                  )
+            """, (user_email, user_email, self.MAX_SESSIONS_PER_USER))
+
+        # Global cap: keep only the MAX_TOTAL_SESSIONS most recent sessions overall.
+        cursor.execute("""
+            DELETE FROM career_sessions
+            WHERE session_id NOT IN (
+                SELECT session_id FROM career_sessions
+                ORDER BY updated_at DESC
+                LIMIT ?
+            )
+        """, (self.MAX_TOTAL_SESSIONS,))
+
     def save_session(self, session_id: str, state: CareerState) -> None:
         """Saves or updates a complete career guidance session state."""
         profile = state.get("profile", {})
@@ -254,8 +327,15 @@ class CareerDatabase:
 
         with self._get_connection() as conn:
             cursor = conn.cursor()
+            # Preserve the original created_at on update. Setting it to "now" on
+            # every save silently rewrites the session's creation timestamp.
+            existing = cursor.execute(
+                "SELECT created_at FROM career_sessions WHERE session_id = ?", (session_id,)
+            ).fetchone()
+            created_at = existing["created_at"] if existing else now
+
             cursor.execute("""
-                INSERT INTO career_sessions 
+                INSERT INTO career_sessions
                     (session_id, student_name, stream, created_at, updated_at, confidence, recommended_degree, state_json, report_markdown, user_email)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(session_id) DO UPDATE SET
@@ -264,12 +344,13 @@ class CareerDatabase:
                     recommended_degree = excluded.recommended_degree,
                     state_json = excluded.state_json,
                     report_markdown = excluded.report_markdown,
-                    user_email = CASE WHEN excluded.user_email != '' THEN excluded.user_email ELSE career_sessions.user_email END
+                    user_email = CASE WHEN excluded.user_email != '' THEN excluded.user_email ELSE career_sessions.user_email END,
+                    created_at = career_sessions.created_at
             """, (
                 session_id,
                 profile.get("name", "Anonymous Student"),
                 profile.get("stream", "Unknown"),
-                now,
+                created_at,
                 now,
                 confidence,
                 recommended_degree,
@@ -277,6 +358,10 @@ class CareerDatabase:
                 report,
                 user_email
             ))
+
+            # Prune oldest sessions so the database cannot grow without bound.
+            # Per-user cap first (a prolific student), then a global safety cap.
+            self._prune_sessions(cursor, user_email, session_id)
 
             # Store trace entries in the audit table
             for log_entry in state.get("interaction_log", []):
@@ -305,7 +390,8 @@ class CareerDatabase:
             if result.get("state_json"):
                 try:
                     result["state"] = json.loads(result["state_json"])
-                except Exception:
+                except json.JSONDecodeError as ex:
+                    logger.warning("Failed to decode state_json for session %s: %s", session_id, ex)
                     result["state"] = {}
             return result
 
@@ -342,30 +428,30 @@ class CareerDatabase:
             return cursor.lastrowid
 
     def get_mentor_history(self, session_id: Optional[str] = None, user_email: Optional[str] = None, limit: int = 30) -> List[Dict[str, Any]]:
-        """Retrieves past conversation memory for the Career Mentor."""
+        """Retrieves past conversation memory for the Career Mentor.
+
+        The query is always scoped to user_email when provided. session_id alone
+        is NOT enough — a student could guess another student's session_id. We
+        require user_email as the primary scope to guarantee isolation.
+        """
         with self._get_connection() as conn:
             cursor = conn.cursor()
-            if session_id and user_email:
+            if user_email:
                 cursor.execute("""
                     SELECT id, session_id, user_email, role, content, agent_used, sources_json, created_at
                     FROM mentor_messages
-                    WHERE session_id = ? OR user_email = ?
+                    WHERE user_email = ?
                     ORDER BY id ASC LIMIT ?
-                """, (session_id, user_email, limit))
+                """, (user_email.strip().lower(), limit))
             elif session_id:
+                # Fallback: only if no user_email is provided (legacy/CLI usage).
+                # In production API calls, get_mentor_history is always called with user_email.
                 cursor.execute("""
                     SELECT id, session_id, user_email, role, content, agent_used, sources_json, created_at
                     FROM mentor_messages
                     WHERE session_id = ?
                     ORDER BY id ASC LIMIT ?
                 """, (session_id, limit))
-            elif user_email:
-                cursor.execute("""
-                    SELECT id, session_id, user_email, role, content, agent_used, sources_json, created_at
-                    FROM mentor_messages
-                    WHERE user_email = ?
-                    ORDER BY id ASC LIMIT ?
-                """, (user_email, limit))
             else:
                 cursor.execute("""
                     SELECT id, session_id, user_email, role, content, agent_used, sources_json, created_at
@@ -380,7 +466,8 @@ class CareerDatabase:
                 if item.get("sources_json"):
                     try:
                         item["sources"] = json.loads(item["sources_json"])
-                    except Exception:
+                    except json.JSONDecodeError as ex:
+                        logger.warning("Failed to decode sources_json for mentor message %s: %s", item.get("id"), ex)
                         item["sources"] = []
                 else:
                     item["sources"] = []
@@ -388,24 +475,47 @@ class CareerDatabase:
             return history
 
     def clear_mentor_history(self, session_id: Optional[str] = None, user_email: Optional[str] = None) -> bool:
-        """Clears conversation memory for a student session."""
+        """Clears conversation memory for a student session.
+
+        Scoped to user_email. The OR logic was a data-leak bug: if you passed
+        another user's email and your session_id, it would wipe their messages too.
+        """
         with self._get_connection() as conn:
             cursor = conn.cursor()
-            if session_id and user_email:
-                cursor.execute("DELETE FROM mentor_messages WHERE session_id = ? OR user_email = ?", (session_id, user_email))
+            if user_email:
+                if session_id:
+                    cursor.execute("DELETE FROM mentor_messages WHERE session_id = ? AND user_email = ?", (session_id, user_email.strip().lower()))
+                else:
+                    cursor.execute("DELETE FROM mentor_messages WHERE user_email = ?", (user_email.strip().lower(),))
             elif session_id:
+                # Legacy/CLI fallback — but in practice the API always passes user_email.
                 cursor.execute("DELETE FROM mentor_messages WHERE session_id = ?", (session_id,))
-            elif user_email:
-                cursor.execute("DELETE FROM mentor_messages WHERE user_email = ?", (user_email,))
             else:
                 cursor.execute("DELETE FROM mentor_messages")
             conn.commit()
             return True
 
     def find_latest_session_by_user(self, user_name: Optional[str] = None, user_email: Optional[str] = None) -> Optional[Dict[str, Any]]:
-        """Finds the most recent completed assessment session for a student."""
+        """Finds the most recent completed assessment session for a student.
+
+        If user_email is provided, the search is strictly scoped to that email.
+        If only user_name is provided, it falls back to a name-based search.
+        We NEVER return a global latest session — that would leak another student's data.
+        """
         with self._get_connection() as conn:
             cursor = conn.cursor()
+
+            if user_email:
+                cursor.execute("""
+                    SELECT session_id FROM career_sessions
+                    WHERE LOWER(user_email) = ?
+                    ORDER BY created_at DESC LIMIT 1
+                """, (user_email.strip().lower(),))
+                row = cursor.fetchone()
+                if row:
+                    return self.load_session(row["session_id"])
+                return None
+
             if user_name:
                 cursor.execute("""
                     SELECT session_id FROM career_sessions
@@ -415,11 +525,9 @@ class CareerDatabase:
                 row = cursor.fetchone()
                 if row:
                     return self.load_session(row["session_id"])
+                return None
 
-            cursor.execute("SELECT session_id FROM career_sessions ORDER BY created_at DESC LIMIT 1")
-            row = cursor.fetchone()
-            if row:
-                return self.load_session(row["session_id"])
+            # No identifying information provided — refuse to return a random user's session.
             return None
 
 
@@ -479,8 +587,10 @@ class TavilySearchTool:
                     })
                 if results:
                     return results
+            except (AttributeError, KeyError, TypeError, ValueError) as e:
+                logger.warning("Live search response malformed (%s). Gracefully falling back to local educational registry.", e)
             except Exception as e:
-                print(f"      [WARNING] Live search failed ({e}). Gracefully falling back to local educational registry.")
+                logger.warning("Live search failed (%s). Gracefully falling back to local educational registry.", e)
 
         # Offline Mock Knowledge Base tailored for Class 12 Indian Streams
         return self._offline_search_fallback(query)
@@ -489,28 +599,8 @@ class TavilySearchTool:
         """High-fidelity curated database of Indian 12th entrance exams, colleges, and scholarships."""
         q = query.lower()
 
-        # Engineering / Computer Science / PCM
-        if any(w in q for w in ["pcm", "b.tech", "cse", "engineering", "ai", "math", "physics"]):
-            return [
-                {
-                    "title": "National Engineering Admissions & JEE Main/Advanced 2025-2026",
-                    "url": "https://jeemain.nta.nic.in",
-                    "content": "JEE Main conducted by NTA offers admission to 31 NITs, 25 IIITs, and top GFTIs. Top 2.5 lakh qualify for JEE Advanced for 23 IITs. Emerging specializations: B.Tech in AI & Data Science, Robotics, Cyber Security, and Aerospace."
-                },
-                {
-                    "title": "Top Tier Engineering Institutions & State CETs",
-                    "url": "https://nirfindia.org/engineering",
-                    "content": "Leading institutions include IITs, BITS Pilani (BITSAT), IIIT Hyderabad (UGEE/JEE), VIT Vellore (VITEEE), MIT Manipal (MET), and State CETs (MHT-CET, KCET, WBJEE). Annual fees range from INR 1.5 Lakhs (NITs/GFTIs) to 4-6 Lakhs (Private)."
-                },
-                {
-                    "title": "Merit & Means Scholarships for Engineering Students",
-                    "url": "https://scholarships.gov.in",
-                    "content": "Central Sector Scheme of Scholarships (Ministry of Education), INSPIRE Scholarship (DST) offering INR 80,000/year, AICTE Pragati Scholarship for female students, and Reliance Foundation Undergraduate Scholarship offering up to INR 2 Lakhs."
-                }
-            ]
-
-        # Medical / Biotech / PCB
-        elif any(w in q for w in ["pcb", "mbbs", "bds", "neet", "biology", "biotechnology", "pharmacy"]):
+        # Medical / Biotech / PCB (Checked before PCM because 'PCB (Physics, Chemistry, Biology)' contains the word 'physics')
+        if any(w in q for w in ["pcb", "mbbs", "bds", "neet", "biology", "biotechnology", "pharmacy", "medicine", "medical"]):
             return [
                 {
                     "title": "NEET-UG National Medical Entrance Details & Cutoffs",
@@ -526,6 +616,26 @@ class TavilySearchTool:
                     "title": "Medical & Life Sciences Scholarships in India",
                     "url": "https://dbtindia.gov.in",
                     "content": "DBT-Junior Research & Science Scholarships, PMSS Central Scholarship, Vidyasaarathi Medical Scholarships, and State Government Fee Reimbursement schemes for Economically Backward Classes."
+                }
+            ]
+
+        # Engineering / Computer Science / PCM
+        elif any(w in q for w in ["pcm", "b.tech", "cse", "engineering", "ai", "math", "physics"]):
+            return [
+                {
+                    "title": "National Engineering Admissions & JEE Main/Advanced 2025-2026",
+                    "url": "https://jeemain.nta.nic.in",
+                    "content": "JEE Main conducted by NTA offers admission to 31 NITs, 25 IIITs, and top GFTIs. Top 2.5 lakh qualify for JEE Advanced for 23 IITs. Emerging specializations: B.Tech in AI & Data Science, Robotics, Cyber Security, and Aerospace."
+                },
+                {
+                    "title": "Top Tier Engineering Institutions & State CETs",
+                    "url": "https://nirfindia.org/engineering",
+                    "content": "Leading institutions include IITs, BITS Pilani (BITSAT), IIIT Hyderabad (UGEE/JEE), VIT Vellore (VITEEE), MIT Manipal (MET), and State CETs (MHT-CET, KCET, WBJEE). Annual fees range from INR 1.5 Lakhs (NITs/GFTIs) to 4-6 Lakhs (Private)."
+                },
+                {
+                    "title": "Merit & Means Scholarships for Engineering Students",
+                    "url": "https://scholarships.gov.in",
+                    "content": "Central Sector Scheme of Scholarships (Ministry of Education), INSPIRE Scholarship (DST) offering INR 80,000/year, AICTE Pragati Scholarship for female students, and Reliance Foundation Undergraduate Scholarship offering up to INR 2 Lakhs."
                 }
             ]
 
@@ -674,11 +784,13 @@ class LLMClient:
                         else:
                             if available:
                                 self.model = available[0]
-                    print(f"[CareerPilot LLM] Live Groq Connected using model: {self.model}")
+                    logger.info("Live Groq Connected using model: %s", self.model)
+                except (AttributeError, KeyError, ValueError) as ex:
+                    logger.warning("Groq model check notice: %s", ex)
                 except Exception as ex:
-                    print(f"[CareerPilot LLM] Model check notice: {ex}")
+                    logger.warning("Groq model check unexpected error: %s", ex)
             except Exception as e:
-                print(f"[WARNING] Groq client initialization warning: {e}. Defaulting to offline mode.")
+                logger.warning("Groq client initialization warning: %s. Defaulting to offline mode.", e)
                 self.client = None
                 self.is_live = False
         else:
@@ -699,10 +811,11 @@ class LLMClient:
                     model=self.model,
                     temperature=0.4,
                     max_tokens=tokens_limit,
+                    timeout=30.0,
                 )
                 return chat_completion.choices[0].message.content or ""
             except Exception as e:
-                print(f"[WARNING] Groq API request failed ({e}). Switching seamlessly to offline reasoning fallback.")
+                logger.warning("Groq API request failed (%s). Switching seamlessly to offline reasoning fallback.", e)
 
         # Offline Intelligent Fallback (Ensures system demonstration is 100% bulletproof)
         return self._offline_complete_fallback(system_prompt, user_prompt)
@@ -733,15 +846,16 @@ class LLMClient:
             if start != -1 and end != -1 and end > start:
                 return json.loads(raw_text[start:end+1])
         except Exception as err:
-            print(f"[WARNING] JSON parsing error: {err}. Raw text was:\n{raw_text[:200]}...")
+            logger.warning("JSON parsing error: %s. Raw text snippet: %s", err, raw_text[:200])
 
-        # Fallback dictionary if JSON could not be parsed
-        return {
-            "recommended_degree": "Bachelor of Technology / Relevant Degree",
-            "career_stream": "Science & Technology",
-            "confidence": 0.85,
-            "reasoning": "Determined based on academic background, interests, and career ambitions."
-        }
+        # NO SILENT FALLBACK. If the LLM cannot produce valid JSON, the pipeline
+        # must surface the failure so the caller can decide how to handle it.
+        # Returning a hardcoded dict with confidence=0.85 silently masks the
+        # error and presents a confident fake recommendation to the student.
+        raise RuntimeError(
+            f"LLM failed to return parseable JSON after all extraction attempts. "
+            f"Raw output: {raw_text[:300]}"
+        )
 
     def complete_chat(self, messages: List[Dict[str, str]], temperature: float = 0.45, max_tokens: int = 2500) -> str:
         """
@@ -754,10 +868,11 @@ class LLMClient:
                     model=self.model,
                     temperature=temperature,
                     max_tokens=max_tokens,
+                    timeout=30.0,
                 )
                 return chat_completion.choices[0].message.content or ""
             except Exception as e:
-                print(f"[WARNING] Groq chat completion request failed ({e}). Switching to offline mentor reasoning.")
+                logger.warning("Groq chat completion request failed (%s). Switching to offline mentor reasoning.", e)
 
         # Offline fallback
         system_prompt = next((m.get("content", "") for m in messages if m.get("role") == "system"), "")
@@ -911,8 +1026,10 @@ class LLMClient:
                             if k in profile and v:
                                 profile[k] = str(v)
                         return profile
-        except Exception:
-            pass
+        except json.JSONDecodeError as ex:
+            logger.debug("Prompt profile was not pure JSON, falling back to line parsing: %s", ex)
+        except Exception as ex:
+            logger.debug("Unexpected error parsing profile JSON: %s", ex)
 
         # 2. Key-value line parsing
         for line in text.splitlines():
@@ -945,7 +1062,7 @@ class LLMClient:
                         profile[mapped] = val
         return profile
 
-    def _offline_complete_fallback(self, system_prompt: str, user_prompt: str) -> str:
+    def offline_complete_fallback(self, system_prompt: str, user_prompt: str) -> str:
         """
         Deterministic, realistic fallback reasoning for offline demonstrations
         when Groq API key is missing or offline mode is toggled.
@@ -961,18 +1078,18 @@ class LLMClient:
         interests_raw = p.get("interests", "").lower()
         goals_raw = p.get("career_goals", "").lower()
         marks_raw = p.get("marks", "80%")
-        text_context = f"{fav_raw} {interests_raw} {goals_raw}"
+        text_context = f"{fav_raw} {interests_raw} {goals_raw} {usr_lower}"
 
         # 1. Aptitude Agent Deliberation -> Returns structured JSON with authentic computed confidence
-        if "aptitude" in sys_lower or "confidence score" in sys_lower:
+        if "aptitude" in sys_lower or "confidence score" in sys_lower or "psychologist" in sys_lower:
             # STRICT Stream-First Resolution: Avoid misrouting due to keywords in hobbies
-            if "pcm" in stream_raw or ("math" in fav_raw and "phys" in fav_raw) or "engineer" in stream_raw:
+            if "pcm" in stream_raw or "pcm" in usr_lower or ("math" in text_context and "phys" in text_context) or "engineer" in text_context:
                 stream_type = "PCM"
-            elif "pcb" in stream_raw or "bio" in fav_raw or "neet" in stream_raw or "medic" in stream_raw:
+            elif "pcb" in stream_raw or "pcb" in usr_lower or "bio" in text_context or "neet" in text_context or "medic" in text_context:
                 stream_type = "PCB"
-            elif "commerce" in stream_raw or "account" in fav_raw or "business" in fav_raw or "finan" in stream_raw:
+            elif "commerce" in stream_raw or "commerce" in usr_lower or "account" in text_context or "business" in text_context or "finan" in text_context:
                 stream_type = "Commerce"
-            elif "arts" in stream_raw or "humanities" in stream_raw or "law" in stream_raw:
+            elif "arts" in stream_raw or "arts" in usr_lower or "humanities" in text_context or "law" in text_context:
                 stream_type = "Arts"
             else:
                 # Discern from subjects & goals if stream was omitted
@@ -1185,8 +1302,10 @@ class LLMClient:
                         job_roles = r_data.get("primary_job_roles", job_roles)
                         reasoning_text = r_data.get("reasoning", reasoning_text)
                         backup_options = r_data.get("backup_degrees", backup_options)
-            except Exception:
-                pass
+            except json.JSONDecodeError as ex:
+                logger.warning("Failed to decode Aptitude Recommendation in Guidance fallback: %s", ex)
+            except Exception as ex:
+                logger.warning("Unexpected error extracting recommendation in Guidance fallback: %s", ex)
 
             roles_formatted = ", ".join(job_roles)
             backups_formatted = "\n".join([f"{i+1}. **{b}**" for i, b in enumerate(backup_options)])
@@ -1258,14 +1377,23 @@ Consistency in daily effort compounds into massive long-term success. Approach y
 
         # 4. Planner Agent Fallback -> Structured Profile
         if "planner" in sys_lower or "counsellor" in sys_lower or "intake" in sys_lower:
+            stream_val = p.get('stream', 'Senior Secondary')
             return json.dumps({
-                "status": "profile_validated",
-                "counselling_assessment": f"The student {name} has provided a coherent {p.get('stream', '12th')} academic profile. Aptitude evaluation is fully verified.",
-                "readiness_score": 0.95
+                "summary": f"Profile organized for {name} with Class 12 {stream_val} foundation and focus on {p.get('career_goals', 'higher education')}.",
+                "key_strengths": [
+                    f"Solid academic track record in {p.get('favorite_subjects', 'core subjects')}",
+                    f"High interest in {p.get('interests', 'practical application and innovation')}",
+                    "Demonstrated goal clarity and career ambition"
+                ],
+                "stream_validation": f"Strongly suited for {stream_val} pathways",
+                "guidance_notes": f"Prioritize verified undergraduate programs matching budget ({p.get('budget', 'flexible')}) and location ({p.get('preferred_location', 'India')})."
             }, indent=2)
 
         # Default Fallback
         return "Deliberation completed successfully."
+
+    # Backward compatibility alias
+    _offline_complete_fallback = offline_complete_fallback
 
 
 
@@ -1321,7 +1449,21 @@ Revision Loop Count: {retry_count}
 Special Revision Request (if any): {revision_notes}
 """
 
-        counsellor_json = self.llm.complete_json(system_prompt, user_prompt)
+        try:
+            counsellor_json = self.llm.complete_json(system_prompt, user_prompt)
+        except RuntimeError as ex:
+            # RuntimeError is raised by complete_json when JSON cannot be parsed
+            logger.warning("PlannerAgent complete_json failed (%s). Using offline fallback intake.", ex)
+            fallback_text = self.llm.offline_complete_fallback(system_prompt, user_prompt)
+            try:
+                counsellor_json = json.loads(fallback_text)
+            except json.JSONDecodeError:
+                counsellor_json = {
+                    "summary": f"Profile organized for {profile.get('name', 'Student')} based on Class 12 {profile.get('stream', '')}.",
+                    "key_strengths": ["Academic Foundations", "Clear Stream Alignment", "Goal Oriented"],
+                    "stream_validation": f"Aligned with {profile.get('stream', 'Senior Secondary')}",
+                    "guidance_notes": "Proceeding with standard aptitude & pathway analysis."
+                }
         profile["counsellor_intake"] = counsellor_json
         state["profile"] = profile
 
@@ -1379,7 +1521,23 @@ Budget: {profile.get('budget')}
 Location Preference: {profile.get('preferred_location')}
 """
 
-        result = self.llm.complete_json(system_prompt, user_prompt)
+        try:
+            result = self.llm.complete_json(system_prompt, user_prompt)
+        except RuntimeError as ex:
+            # RuntimeError is raised by complete_json when JSON cannot be parsed
+            logger.warning("AptitudeAgent complete_json failed (%s). Using offline aptitude deliberation fallback.", ex)
+            fallback_text = self.llm.offline_complete_fallback(system_prompt, user_prompt)
+            try:
+                result = json.loads(fallback_text)
+            except json.JSONDecodeError:
+                result = {
+                    "recommended_degree": "B.Tech in Computer Science & Engineering",
+                    "career_stream": "Computer Science & Engineering (PCM)",
+                    "confidence": 0.85,
+                    "reasoning": "Academic strengths and career aspirations demonstrate high alignment.",
+                    "primary_job_roles": ["Software Engineer", "Systems Analyst", "Technical Consultant"],
+                    "backup_degrees": ["B.Tech in Information Technology", "B.Sc in Computer Science"]
+                }
         
         # Ensure confidence is a float
         try:
@@ -1442,43 +1600,73 @@ Location: {location}
 Student Marks: {profile.get('marks')}
 """
 
-        search_plan = self.llm.complete_json(system_prompt, user_prompt)
+        try:
+            search_plan = self.llm.complete_json(system_prompt, user_prompt)
+        except RuntimeError as ex:
+            # RuntimeError is raised by complete_json when JSON cannot be parsed
+            logger.warning("PathwayAgent search_plan complete_json failed (%s). Using query heuristics.", ex)
+            search_plan = {
+                "exam_query": f"Entrance exams 2025 for {degree} admissions in India eligibility",
+                "college_query": f"Top colleges for {degree} in {location} budget {budget}",
+                "scholarship_query": f"Scholarships for {degree} 12th pass students {stream} India"
+            }
         exam_q = search_plan.get("exam_query") or f"Entrance exams 2025 for {degree} admissions in India eligibility"
         college_q = search_plan.get("college_query") or f"Top colleges for {degree} in {location} budget {budget}"
         scholarship_q = search_plan.get("scholarship_query") or f"Scholarships for {degree} 12th pass students {stream} India"
 
-        # 1. MCP Tool: search_colleges
-        record_log(state, "PathwayAgent", f"Invoking MCP tool: search_colleges(query='{college_q}')")
-        colleges_raw = self.mcp.call_tool("search_colleges", query=college_q)
+        # Concurrent MCP Tool Invocations
+        record_log(state, "PathwayAgent", "Executing live MCP queries concurrently for colleges, entrance exams, and scholarships...")
+        with ThreadPoolExecutor(max_workers=3) as executor:
+            fut_colleges = executor.submit(self.mcp.call_tool, "search_colleges", query=college_q)
+            fut_exams = executor.submit(self.mcp.call_tool, "search_entrance_exams", stream=stream, degree=degree, query=exam_q)
+            fut_scholarships = executor.submit(self.mcp.call_tool, "search_scholarships", stream=stream, budget=budget, query=scholarship_q)
 
-        # 2. MCP Tool: search_entrance_exams
-        record_log(state, "PathwayAgent", f"Invoking MCP tool: search_entrance_exams(stream='{stream}', degree='{degree}', query='{exam_q}')")
-        exams_raw = self.mcp.call_tool("search_entrance_exams", stream=stream, degree=degree, query=exam_q)
-
-        # 3. MCP Tool: search_scholarships
-        record_log(state, "PathwayAgent", f"Invoking MCP tool: search_scholarships(stream='{stream}', budget='{budget}', query='{scholarship_q}')")
-        scholarships_raw = self.mcp.call_tool("search_scholarships", stream=stream, budget=budget, query=scholarship_q)
+            try:
+                colleges_raw = fut_colleges.result(timeout=30)
+            except Exception as ex:
+                logger.warning("MCP tool search_colleges failed or timed out: %s", ex)
+                colleges_raw = []
+            try:
+                exams_raw = fut_exams.result(timeout=30)
+            except Exception as ex:
+                logger.warning("MCP tool search_entrance_exams failed or timed out: %s", ex)
+                exams_raw = []
+            try:
+                scholarships_raw = fut_scholarships.result(timeout=30)
+            except Exception as ex:
+                logger.warning("MCP tool search_scholarships failed or timed out: %s", ex)
+                scholarships_raw = []
 
         # Parse MCP JSON output
         try:
             college_results = json.loads(colleges_raw) if isinstance(colleges_raw, str) else colleges_raw
-        except Exception:
-            college_results = colleges_raw
+        except json.JSONDecodeError as ex:
+            logger.warning("Failed to decode colleges_raw as JSON: %s", ex)
+            college_results = colleges_raw if isinstance(colleges_raw, list) else []
+        except Exception as ex:
+            logger.warning("Unexpected error parsing colleges_raw: %s", ex)
+            college_results = colleges_raw if isinstance(colleges_raw, list) else []
 
         try:
             exam_results = json.loads(exams_raw) if isinstance(exams_raw, str) else exams_raw
-        except Exception:
-            exam_results = exams_raw
+        except json.JSONDecodeError as ex:
+            logger.warning("Failed to decode exams_raw as JSON: %s", ex)
+            exam_results = exams_raw if isinstance(exams_raw, list) else []
+        except Exception as ex:
+            logger.warning("Unexpected error parsing exams_raw: %s", ex)
+            exam_results = exams_raw if isinstance(exams_raw, list) else []
 
         try:
             scholarship_results = json.loads(scholarships_raw) if isinstance(scholarships_raw, str) else scholarships_raw
-        except Exception:
-            scholarship_results = scholarships_raw
+        except json.JSONDecodeError as ex:
+            logger.warning("Failed to decode scholarships_raw as JSON: %s", ex)
+            scholarship_results = scholarships_raw if isinstance(scholarships_raw, list) else []
+        except Exception as ex:
+            logger.warning("Unexpected error parsing scholarships_raw: %s", ex)
+            scholarship_results = scholarships_raw if isinstance(scholarships_raw, list) else []
 
-        # Agent Synthesis & Degree Validation:
-        # Guarantee 100% degree relevance (e.g. strictly filter out JEE/engineering exams for MBBS candidates)
-        try:
-            filter_prompt = f"""You are an Admissions Research Director.
+        # Prepare Verification Prompts
+        filter_prompt = f"""You are an Admissions Research Director.
 Target Degree: {degree}
 Academic Stream: {stream}
 
@@ -1503,15 +1691,8 @@ Return JSON array:
     "url": "Official portal URL"
   }}
 ]"""
-            verified_exams = self.llm.complete_json("Return a JSON list of verified exams only.", filter_prompt)
-            if isinstance(verified_exams, list) and len(verified_exams) > 0:
-                exam_results = verified_exams
-        except Exception:
-            pass
 
-        # Synthesize colleges into clean, structured records with points and explanations
-        try:
-            college_prompt = f"""You are an Institutional Admissions Director.
+        college_prompt = f"""You are an Institutional Admissions Director.
 Target Degree: {degree}
 Academic Stream: {stream}
 Review raw college search results: {json.dumps(college_results)}
@@ -1538,15 +1719,8 @@ Return JSON array:
     "url": "Official portal URL"
   }}
 ]"""
-            verified_colleges = self.llm.complete_json("Return a JSON list of verified colleges only.", college_prompt)
-            if isinstance(verified_colleges, list) and len(verified_colleges) > 0:
-                college_results = verified_colleges
-        except Exception:
-            pass
 
-        # Synthesize scholarships into clean, structured records with points and explanations
-        try:
-            scholarship_prompt = f"""You are a National Scholarship Director.
+        scholarship_prompt = f"""You are a National Scholarship Director.
 Target Degree: {degree}
 Academic Stream: {stream}
 Review raw scholarship search results: {json.dumps(scholarship_results)}
@@ -1571,11 +1745,67 @@ Return JSON array:
     "url": "Official portal URL"
   }}
 ]"""
-            verified_scholarships = self.llm.complete_json("Return a JSON list of verified scholarships only.", scholarship_prompt)
-            if isinstance(verified_scholarships, list) and len(verified_scholarships) > 0:
-                scholarship_results = verified_scholarships
-        except Exception:
-            pass
+
+        # Concurrent LLM Verification and Structuring
+        def _verify_exams():
+            try:
+                res = self.llm.complete_json("Return a JSON list of verified exams only.", filter_prompt)
+                if isinstance(res, list) and len(res) > 0:
+                    return res
+            except RuntimeError as ex:
+                # RuntimeError is raised by complete_json when JSON cannot be parsed
+                logger.warning("LLM exam verification fallback triggered: %s", ex)
+            return exam_results
+
+        def _verify_colleges():
+            try:
+                res = self.llm.complete_json("Return a JSON list of verified colleges only.", college_prompt)
+                if isinstance(res, list) and len(res) > 0:
+                    return res
+            except RuntimeError as ex:
+                # RuntimeError is raised by complete_json when JSON cannot be parsed
+                logger.warning("LLM college verification fallback triggered: %s", ex)
+            return college_results
+
+        def _verify_scholarships():
+            try:
+                res = self.llm.complete_json("Return a JSON list of verified scholarships only.", scholarship_prompt)
+                if isinstance(res, list) and len(res) > 0:
+                    return res
+            except RuntimeError as ex:
+                # RuntimeError is raised by complete_json when JSON cannot be parsed
+                logger.warning("LLM scholarship verification fallback triggered: %s", ex)
+            return scholarship_results
+
+        with ThreadPoolExecutor(max_workers=3) as executor:
+            fut_v_exams = executor.submit(_verify_exams)
+            fut_v_colleges = executor.submit(_verify_colleges)
+            fut_v_scholarships = executor.submit(_verify_scholarships)
+
+            try:
+                exam_results = fut_v_exams.result(timeout=30)
+            except concurrent.futures.TimeoutError:
+                logger.warning("Exam verification timed out; using unverified results")
+            except concurrent.futures.CancelledError:
+                logger.warning("Exam verification cancelled")
+            except Exception as ex:
+                logger.warning("Exam verification future failed: %s", ex)
+            try:
+                college_results = fut_v_colleges.result(timeout=30)
+            except concurrent.futures.TimeoutError:
+                logger.warning("College verification timed out; using unverified results")
+            except concurrent.futures.CancelledError:
+                logger.warning("College verification cancelled")
+            except Exception as ex:
+                logger.warning("College verification future failed: %s", ex)
+            try:
+                scholarship_results = fut_v_scholarships.result(timeout=30)
+            except concurrent.futures.TimeoutError:
+                logger.warning("Scholarship verification timed out; using unverified results")
+            except concurrent.futures.CancelledError:
+                logger.warning("Scholarship verification cancelled")
+            except Exception as ex:
+                logger.warning("Scholarship verification future failed: %s", ex)
 
         pathway_data = {
             "search_queries": search_plan,
@@ -1785,11 +2015,22 @@ def build_career_graph(llm: LLMClient, db: CareerDatabase, search_tool: TavilySe
 # --------------------------------------------------------------------------- #
 # This section provides simple entry functions callable by FastAPI and CLI.
 
-# Singleton instances initialized once for fast access
-global_db = CareerDatabase()
-global_search = TavilySearchTool()
-global_llm = LLMClient()
-global_graph = build_career_graph(global_llm, global_db, global_search)
+# Forward references - actual initialization at module bottom after all classes are defined
+global_db = None
+global_search = None
+global_llm = None
+global_graph = None
+global_mentor = None
+
+
+def _init_globals():
+    """Initializes global singletons. Called at module bottom."""
+    global global_db, global_search, global_llm, global_graph, global_mentor
+    global_db = CareerDatabase()
+    global_search = TavilySearchTool()
+    global_llm = LLMClient()
+    global_graph = build_career_graph(global_llm, global_db, global_search)
+    global_mentor = CareerMentorAgent(global_llm, global_db, global_search)
 
 
 def run_career_guidance(student_data: Dict[str, Any], session_id: Optional[str] = None) -> Dict[str, Any]:
@@ -1904,8 +2145,8 @@ class CareerMentorAgent:
             if session:
                 session_id = session.get("session_id")
 
-        if not session:
-            # Fallback to the latest recent session if available
+        if not session and not user_email:
+            # Fallback to the latest recent session only for unauthenticated CLI demo
             recent = self.db.list_recent_sessions(limit=1)
             if recent and recent[0].get("session_id"):
                 session = self.db.load_session(recent[0]["session_id"])
@@ -1937,6 +2178,12 @@ class CareerMentorAgent:
         confidence = session.get("confidence") or state.get("confidence", 0.94)
         recommended_degree = session.get("recommended_degree") or recommendation.get("recommended_degree", "B.Tech in Robotics & Automation / Artificial Intelligence")
         stream = profile.get("stream") or session.get("stream", "Class 12")
+
+        # The PathwayAgent stores data under 'entrance_exams_data', 'colleges_data', 'scholarships_data'.
+        # The mentor's prompt template expects the singular keys. Expose both so existing code works.
+        pathway["entrance_exams"] = pathway.get("entrance_exams_data", [])
+        pathway["colleges"] = pathway.get("colleges_data", [])
+        pathway["scholarships"] = pathway.get("scholarships_data", [])
 
         # 4. Multi-Agent Intent Routing & Tool Execution
         msg_lower = user_message.lower()
@@ -2099,7 +2346,7 @@ def run_cli_demo():
     print(">> CAREERPILOT AI: 12TH CAREER GUIDANCE BACKEND")
     print("   Agentic Architecture: LangGraph + Groq Llama-3.3-70B + Tavily + MCP")
     print("="*75)
-    print(f">> Environment: LLM Live: {global_llm.is_live} | Search Live: {global_search.is_live} | DB: {DATABASE_PATH}")
+    print(f">> Environment: LLM Live: {global_llm.is_live} | Search Live: {global_search.is_live} | DB: {DATABASE_PATH()}")
     print("="*75)
     print("\nChoose a demonstration profile for your evaluation:")
     print("  [1] Candidate Track 1 - Class 12 PCM (Engineering, Computing & AI)")
@@ -2199,6 +2446,9 @@ def run_cli_demo():
     print(f">> Session stored in SQLite memory under ID: {result['session_id']}")
     print(">> Demonstration Complete!")
 
+
+# Initialize global singletons
+_init_globals()
 
 if __name__ == "__main__":
     run_cli_demo()

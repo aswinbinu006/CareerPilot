@@ -149,26 +149,29 @@ export default function DashboardPage() {
   const cardsContainerRef = useRef(null);
   const navigate = useNavigate();
 
-  const loadData = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const user = api.getCurrentUser();
-      setCurrentUser(user);
-
-      const sessions = await api.getUserSessions(user);
-      setRecentSessions(sessions || []);
-    } catch (err) {
-      setError(err.message || 'Unable to load dashboard records.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
+    let isMounted = true;
+
+    const loadData = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const user = api.getCurrentUser();
+        if (isMounted) setCurrentUser(user);
+
+        const sessions = await api.getUserSessions(user);
+        if (isMounted) setRecentSessions(sessions || []);
+      } catch (err) {
+        if (isMounted) setError(err.message || 'Unable to load dashboard records.');
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    };
+
     loadData();
     window.addEventListener('careerpilot_auth_changed', loadData);
     return () => {
+      isMounted = false;
       window.removeEventListener('careerpilot_auth_changed', loadData);
     };
   }, []);

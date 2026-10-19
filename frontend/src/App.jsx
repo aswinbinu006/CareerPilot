@@ -41,6 +41,7 @@ import PageTransition from './components/common/PageTransition';
 import BackToTopButton from './components/common/BackToTopButton';
 import PrivacyNotice from './components/common/PrivacyNotice';
 import NetworkStatusBar from './components/common/NetworkStatusBar';
+import BackendStatusBar from './components/common/BackendStatusBar';
 
 function AppContent() {
   // Initialize Lenis smooth scroll and connect with GSAP ScrollTrigger
@@ -64,7 +65,8 @@ function AppContent() {
         Skip to main content
       </a>
 
-      {/* Network Connectivity Status */}
+      {/* Backend & Network Connectivity Status */}
+      <BackendStatusBar />
       <NetworkStatusBar />
 
       {/* 8. Scroll Progress Bar */}

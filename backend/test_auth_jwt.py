@@ -7,7 +7,17 @@ import json
 import jwt
 
 BASE_URL = "http://127.0.0.1:8000"
-JWT_SECRET = "cp_super_secret_jwt_key_2026_careerpilot_production_safe_token_998877"
+
+# Read the JWT secret from the environment instead of hardcoding it.
+# A hardcoded secret here would leak into the git history and let anyone
+# forge valid session tokens. The backend's own JWT_SECRET is the source
+# of truth; tests must match it exactly.
+JWT_SECRET = os.environ.get("JWT_SECRET", "")
+if not JWT_SECRET:
+    raise RuntimeError(
+        "JWT_SECRET is not set. Run the test with the backend's JWT_SECRET "
+        "exported in the environment (e.g. `source backend/.env`)."
+    )
 
 def request(endpoint, method="GET", data=None):
     url = f"{BASE_URL}{endpoint}"
